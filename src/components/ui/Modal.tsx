@@ -28,3 +28,4 @@ export function Modal({ isOpen, onClose, title, children }: { isOpen: boolean, o
     </div>
   );
 }
+
