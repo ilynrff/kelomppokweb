@@ -25,18 +25,11 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Invalid date. Use YYYY-MM-DD." }, { status: 400 });
     }
 
-    // Auto-expire old pending bookings to free up slots
-    const expirationCutoff = new Date(Date.now() - 15 * 60 * 1000);
-    await prisma.booking.updateMany({
-      where: { status: "PENDING", createdAt: { lt: expirationCutoff } },
-      data: { status: "EXPIRED" },
-    });
-
     const existingBookings = await prisma.booking.findMany({
       where: {
         courtId,
         date: queryDate,
-        status: { in: ["PENDING", "CONFIRMED"] },
+        status: { in: ["PENDING", "CONFIRMED", "PERLU_VERIFIKASI", "RESCHEDULE_REQUESTED", "RESCHEDULE_APPROVED"] },
       },
       select: { startTime: true, endTime: true },
     });
