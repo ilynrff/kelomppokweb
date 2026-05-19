@@ -1,0 +1,90 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum BookingStatus {
+  PENDING
+  PERLU_VERIFIKASI
+  CONFIRMED
+  CANCELLED
+  EXPIRED
+  COMPLETED
+  RESCHEDULE_REQUESTED
+  RESCHEDULE_APPROVED
+  RESCHEDULE_REJECTED
+}
+
+enum PaymentStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+}
+
+model User {
+  id        String    @id @default(uuid())
+  name      String
+  email     String    @unique
+  password  String
+  role      String    @default("USER")
+  bookings  Booking[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Court {
+  id           String    @id @default(uuid())
+  name         String
+  location     String
+  pricePerHour Int
+  image        String?
+  description  String?
+  bookings     Booking[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Booking {
+  id              String        @id @default(uuid())
+  userId          String
+  courtId         String
+  date            DateTime
+  startTime       Int
+  endTime         Int
+  status          BookingStatus @default(PENDING)
+  totalPrice      Int
+  paymentProofUrl String?
+  expiresAt       DateTime      // Payment deadline = createdAt + 15 min
+
+  // Reschedule request fields
+  rescheduleDate      DateTime? // Requested new date
+  rescheduleStartTime Int?      // Requested new startTime (minutes)
+  rescheduleEndTime   Int?      // Requested new endTime (minutes)
+  rescheduleNote      String?   // Optional note from user
+
+  user    User    @relation(fields: [userId], references: [id])
+  court   Court   @relation(fields: [courtId], references: [id])
+  payment Payment?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([courtId, date])
+  @@index([userId])
+  @@index([status, expiresAt])
+}
+
+model Payment {
+  id         String        @id @default(uuid())
+  bookingId  String        @unique
+  proofImage String
+  status     PaymentStatus @default(PENDING)
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
