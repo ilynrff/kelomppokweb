@@ -3,235 +3,199 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { getErrorMessage } from "@/lib/errorMessage";
-import { coerceDateOnlyUTC, parseSlotToRange } from "@/lib/bookingTime";
+import { getVirtualStatus, formatMinutesToHHmm } from "@/lib/bookingTime";
+import { createNotification } from "@/lib/notifications";
+import { sendWhatsAppMessage, formatBookingMessage } from "@/lib/whatsapp";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
-/** POST /api/bookings/[id]/reschedule — User requests a reschedule */
-export async function POST(
-  req: Request,
-  { params }: { params: { id: string } },
-) {
+const VALID_STATUSES = ["PENDING", "CONFIRMED", "CANCELLED", "EXPIRED", "COMPLETED", "REFUNDED", "PERLU_VERIFIKASI"];
+
+import { normalizeImages } from "@/lib/courtUtils";
+
+export async function GET(_req: Request, { params }: { params: { id: string } }) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const booking = await prisma.booking.findUnique({
-      where: { id: params.id },
-    });
-    if (!booking)
-      return NextResponse.json(
-        { error: "Booking tidak ditemukan" },
-        { status: 404 },
-      );
-    if (booking.userId !== session.user.id) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-    if (booking.status !== "CONFIRMED") {
-      const msg =
-        booking.status === "RESCHEDULE_APPROVED"
-          ? "Booking ini sudah pernah di-reschedule (hanya boleh 1x)."
-          : "Reschedule hanya bisa untuk booking yang sudah CONFIRMED.";
-      return NextResponse.json({ error: msg }, { status: 400 });
-    }
-
-    // Check 12-hour rule
-    const bookingStart = new Date(booking.date);
-    bookingStart.setUTCMinutes(
-      bookingStart.getUTCMinutes() + booking.startTime,
-    );
-    const hoursUntil = (bookingStart.getTime() - Date.now()) / 3600000;
-    if (hoursUntil < 12) {
-      return NextResponse.json(
-        {
-          error:
-            "Reschedule hanya bisa jika > 12 jam sebelum jadwal. Booking tidak bisa direschedule.",
-        },
-        { status: 400 },
-      );
-    }
-
-    const body = (await req.json()) as Record<string, unknown>;
-    const newDate = coerceDateOnlyUTC(String(body.date ?? ""));
-    if (!newDate)
-      return NextResponse.json(
-        { error: "Tanggal baru tidak valid (format YYYY-MM-DD)" },
-        { status: 400 },
-      );
-
-    let rescheduleStartTime: number;
-    let rescheduleEndTime: number;
-
-    if (body.timeSlot && typeof body.timeSlot === "string") {
-      const range = parseSlotToRange(body.timeSlot);
-      if (!range)
-        return NextResponse.json(
-          { error: "Format jam tidak valid (contoh: '09:00 - 10:00')" },
-          { status: 400 },
-        );
-      rescheduleStartTime = range.start;
-      rescheduleEndTime = range.end;
-    } else if (
-      typeof body.startTime === "number" &&
-      typeof body.endTime === "number"
-    ) {
-      rescheduleStartTime = body.startTime;
-      rescheduleEndTime = body.endTime;
-    } else {
-      return NextResponse.json(
-        { error: "Sertakan timeSlot atau startTime dan endTime" },
-        { status: 400 },
-      );
-    }
-
-    const updated = await prisma.booking.update({
-      where: { id: params.id },
-      data: {
-        status: "RESCHEDULE_REQUESTED",
-        rescheduleDate: newDate,
-        rescheduleStartTime,
-        rescheduleEndTime,
-        rescheduleNote: body.note ? String(body.note) : null,
+    const booking = await prisma.booking.findFirst({
+      where: {
+        id: params.id,
+        ...(session.user.role === "ADMIN" ? {} : { userId: session.user.id }),
+      },
+      include: {
+        user: { select: { id: true, name: true, whatsapp: true } },
+        court: { select: { id: true, name: true, location: true, pricePerHour: true, images: true } },
+        payment: { select: { id: true, status: true, proofImage: true, createdAt: true } },
       },
     });
 
-    return NextResponse.json(updated, { status: 200 });
+    if (!booking) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    // Normalize court images
+    if (booking.court) {
+      booking.court.images = normalizeImages(booking.court.images) as any;
+    }
+
+    return NextResponse.json({
+      ...booking,
+      status: getVirtualStatus(booking as any),
+    });
   } catch (error: unknown) {
-    console.error("API Error [POST reschedule]:", error);
-    return NextResponse.json(
-      { error: "Internal Server Error", details: getErrorMessage(error) },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "Internal Server Error", details: getErrorMessage(error) }, { status: 500 });
   }
 }
 
-/** PATCH /api/bookings/[id]/reschedule — Admin approves or rejects */
-export async function PATCH(
-  req: Request,
-  { params }: { params: { id: string } },
-) {
+export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   try {
     const session = await getServerSession(authOptions);
     if (!session || session.user.role !== "ADMIN") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const booking = await prisma.booking.findUnique({
-      where: { id: params.id },
-    });
-    if (!booking)
-      return NextResponse.json(
-        { error: "Booking tidak ditemukan" },
-        { status: 404 },
-      );
-    if (booking.status !== "RESCHEDULE_REQUESTED") {
-      return NextResponse.json(
-        { error: "Booking tidak dalam status RESCHEDULE_REQUESTED" },
-        { status: 400 },
-      );
-    }
-
     const body = (await req.json()) as Record<string, unknown>;
-    const action = String(body.action ?? "").toUpperCase();
-
-    if (action === "APPROVE") {
-      if (
-        !booking.rescheduleDate ||
-        booking.rescheduleStartTime == null ||
-        booking.rescheduleEndTime == null
-      ) {
-        return NextResponse.json(
-          { error: "Data reschedule tidak lengkap" },
-          { status: 400 },
-        );
-      }
-
-      // 1. RE-VERIFY conflict on the new slot right before approval
-      const conflict = await prisma.booking.findFirst({
-        where: {
-          id: { not: booking.id },
-          courtId: booking.courtId,
-          date: booking.rescheduleDate,
-          // Block if any of these statuses already occupy the slot
-          status: {
-            in: [
-              "PENDING",
-              "CONFIRMED",
-              "PERLU_VERIFIKASI",
-              "RESCHEDULE_REQUESTED",
-              "RESCHEDULE_APPROVED",
-            ],
-          },
-          AND: [
-            { startTime: { lt: booking.rescheduleEndTime } },
-            { endTime: { gt: booking.rescheduleStartTime } },
-          ],
-        },
-      });
-
-      if (conflict) {
-        return NextResponse.json(
-          {
-            error:
-              "Slot baru sudah terisi oleh booking lain. Reschedule gagal.",
-          },
-          { status: 409 },
-        );
-      }
-
-      console.log(`[Reschedule] Approving booking ${params.id}:`, {
-        old: {
-          date: booking.date,
-          start: booking.startTime,
-          end: booking.endTime,
-        },
-        new: {
-          date: booking.rescheduleDate,
-          start: booking.rescheduleStartTime,
-          end: booking.rescheduleEndTime,
-        },
-      });
-
-      const updated = await prisma.booking.update({
-        where: { id: params.id },
-        data: {
-          status: "RESCHEDULE_APPROVED", // Keep as APPROVED to prevent further reschedules
-          date: booking.rescheduleDate,
-          startTime: booking.rescheduleStartTime,
-          endTime: booking.rescheduleEndTime,
-          rescheduleDate: null,
-          rescheduleStartTime: null,
-          rescheduleEndTime: null,
-          rescheduleNote: null,
-        },
-      });
-      return NextResponse.json(updated);
+    const status = body.status;
+    if (!status || typeof status !== "string") {
+      return NextResponse.json({ error: "Status is required" }, { status: 400 });
     }
 
-    if (action === "REJECT") {
-      const updated = await prisma.booking.update({
-        where: { id: params.id },
-        data: {
-          status: "RESCHEDULE_REJECTED",
-          rescheduleDate: null,
-          rescheduleStartTime: null,
-          rescheduleEndTime: null,
-          rescheduleNote: null,
-        },
-      });
-      return NextResponse.json(updated);
+    const normalized = String(status).toUpperCase();
+    if (!VALID_STATUSES.includes(normalized)) {
+      return NextResponse.json({ error: `Invalid status. Must be one of: ${VALID_STATUSES.join(", ")}` }, { status: 400 });
     }
 
-    return NextResponse.json(
-      { error: "Action tidak valid. Gunakan 'approve' atau 'reject'" },
-      { status: 400 },
-    );
+    const updatedBooking = await prisma.$transaction(async (tx) => {
+      const booking = await tx.booking.findUnique({
+        where: { id: params.id },
+        include: { payment: true },
+      });
+      if (!booking) return null;
+
+      let refundAmount: number | undefined = undefined;
+
+      if (normalized === "CONFIRMED") {
+        if (booking.payment) {
+          await tx.payment.update({
+            where: { id: booking.payment.id },
+            data: { status: "CONFIRMED" },
+          });
+        }
+      }
+
+      if (normalized === "CANCELLED" || normalized === "EXPIRED") {
+        if (booking.payment) {
+          await tx.payment.update({
+            where: { id: booking.payment.id },
+            data: { status: "REJECTED" },
+          });
+        }
+      }
+
+      if (normalized === "REFUNDED") {
+        // Calculate refund: booking date is in UTC, endTime is minutes from midnight
+        const bookingStart = new Date(booking.date);
+        bookingStart.setUTCMinutes(bookingStart.getUTCMinutes() + booking.startTime);
+        const now = new Date();
+        const hoursUntilGame = (bookingStart.getTime() - now.getTime()) / 3600000;
+
+        // >= 2 hours before: 100% refund, < 2 hours: 50% refund
+        const refundPercent = hoursUntilGame >= 2 ? 100 : 50;
+        refundAmount = Math.round((booking.totalPrice * refundPercent) / 100);
+
+        if (booking.payment) {
+          await tx.payment.update({
+            where: { id: booking.payment.id },
+            data: { status: "REJECTED" },
+          });
+        }
+      }
+
+      const result = await tx.booking.update({
+        where: { id: params.id },
+        data: {
+          status: normalized as any,
+          ...(refundAmount !== undefined ? { refundAmount } : {}),
+        },
+        include: {
+          user: { select: { id: true, name: true, whatsapp: true } },
+          court: { select: { id: true, name: true, location: true, pricePerHour: true, images: true } },
+          payment: { select: { id: true, status: true, proofImage: true, createdAt: true } },
+        },
+      });
+
+      if (result && result.court) {
+        result.court.images = normalizeImages(result.court.images) as any;
+      }
+      return result;
+    });
+
+    if (!updatedBooking) {
+      console.log("❌ [BookingsAPI] Booking not found after transaction update");
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    console.log("=========================================");
+    console.log("🚀 BOOKING STATUS PATCH COMPLETED");
+    console.log("=========================================");
+    console.log(`[BookingsAPI] New Status: ${normalized}`);
+
+    // --- NOTIFICATION & WHATSAPP TRIGGERS ---
+    const b = updatedBooking;
+    
+    // In-app notifications
+    if (normalized === "CONFIRMED") {
+      console.log(`[BookingsAPI] Booking approved. Creating in-app notification...`);
+      await createNotification({
+        userId: b.userId,
+        title: "Payment Confirmed!",
+        message: `Your booking ${b.bookingCode || "PDL-XXXX"} for ${b.court?.name || "Court"} is officially reserved.`,
+        type: "PAYMENT",
+      });
+
+      console.log(`[BookingsAPI] User details - Name: ${b.user.name}, WhatsApp: ${b.user.whatsapp}`);
+      console.log(`[BookingsAPI] Triggering WhatsApp notification...`);
+
+      const message = formatBookingMessage({
+        name: b.user.name,
+        bookingCode: b.bookingCode || "PDL-XXXX",
+        courtName: b.court?.name || "Court",
+        date: new Date(b.date).toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
+        time: `${formatMinutesToHHmm(b.startTime)} - ${formatMinutesToHHmm(b.endTime)}`,
+      });
+
+      if (b.user.whatsapp) {
+        console.log(`[BookingsAPI] Triggering sendWhatsAppMessage asynchronously to: ${b.user.whatsapp}`);
+        sendWhatsAppMessage(b.user.whatsapp, message)
+          .then((waResult) => {
+            console.log(`[BookingsAPI] WhatsApp sending completed. Result:`, waResult);
+          })
+          .catch((err) => {
+            console.error(`[BookingsAPI] WhatsApp sending failed:`, err);
+          });
+      } else {
+        console.log("⚠️ [BookingsAPI] User has no WhatsApp number in profile. Skipping WA notification.");
+      }
+    } else if (normalized === "CANCELLED") {
+      console.log(`[BookingsAPI] Booking cancelled. Creating in-app notification...`);
+      await createNotification({
+        userId: b.userId,
+        title: "Payment Rejected",
+        message: `Your payment proof for ${b.bookingCode || "PDL-XXXX"} was rejected. Booking has been cancelled.`,
+        type: "PAYMENT",
+      });
+    }
+
+    console.log("=========================================");
+    console.log("🎉 BOOKING STATUS PATCH FINISHED SUCCESS");
+    console.log("=========================================\n");
+
+    return NextResponse.json({
+      ...updatedBooking,
+      status: getVirtualStatus(updatedBooking as any),
+    });
   } catch (error: unknown) {
-    console.error("API Error [PATCH reschedule]:", error);
-    return NextResponse.json(
-      { error: "Internal Server Error", details: getErrorMessage(error) },
-      { status: 500 },
-    );
+    console.error("❌ [BookingsAPI] Error updating booking:", error);
+    return NextResponse.json({ error: "Internal Server Error", details: getErrorMessage(error) }, { status: 500 });
   }
 }
