@@ -1,14 +1,18 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Syne } from "next/font/google";
 import "@/styles/globals.css";
 import Navbar from "@/components/Navbar";
 import { NextAuthProvider } from "@/components/NextAuthProvider";
 
-const inter = Inter({ subsets: ["latin"], display: 'swap' });
+const inter = Inter({ subsets: ["latin"], display: 'swap', variable: "--font-inter" });
+const syne = Syne({ subsets: ["latin"], display: 'swap', variable: "--font-syne", weight: ["400", "500", "600", "700", "800"] });
 
 export const metadata: Metadata = {
-  title: "PadelX - Premium Booking System",
+  title: "PadelGo - Premium Booking System",
   description: "Book your padel courts efficiently.",
+  icons: {
+    icon: "/images/tennis-balls.png"
+  }
 };
 
 export default function RootLayout({
@@ -17,14 +21,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className={`${inter.className} min-h-screen flex flex-col bg-slate-50 text-slate-900`}>
-          <NextAuthProvider>
-            <Navbar />
-            <main className="flex-1 w-full flex flex-col">
-              {children}
-            </main>
-          </NextAuthProvider>
+    <html lang="en" className={`${inter.variable} ${syne.variable}`}>
+      <body className="min-h-screen flex flex-col bg-dark-bg text-white font-sans antialiased">
+        <NextAuthProvider>
+          <Navbar />
+          <main className="flex-1 w-full flex flex-col">
+            {children}
+          </main>
+        </NextAuthProvider>
       </body>
     </html>
   );
