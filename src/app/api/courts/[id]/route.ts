@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { getErrorMessage } from "@/lib/errorMessage";
+import { normalizeImages } from "@/lib/courtUtils";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -17,8 +18,10 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
     const body: unknown = await req.json();
     const payload = (body ?? {}) as Record<string, unknown>;
-    const { name, location, pricePerHour, image, description } = payload;
+    const { name, location, pricePerHour, images, description } = payload;
 
+    const finalImages = images !== undefined ? normalizeImages(images) : undefined;
+ 
     const updated = await prisma.court.update({
       where: { id: params.id },
       data: {
@@ -27,7 +30,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         ...(pricePerHour !== undefined
           ? { pricePerHour: Math.round(Number(pricePerHour)) }
           : {}),
-        ...(image !== undefined ? { image: image ? String(image) : null } : {}),
+        ...(finalImages !== undefined ? { images: finalImages } : {}),
         ...(description !== undefined ? { description: description ? String(description) : null } : {}),
       },
     });
