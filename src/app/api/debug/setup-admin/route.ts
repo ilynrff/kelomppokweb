@@ -4,25 +4,25 @@ import bcrypt from "bcryptjs";
 
 export async function GET() {
   try {
-    const email = "admin@padelgo.com";
+    const whatsapp = "+628123456789";
     const password = "admin123";
     const hashedPassword = await bcrypt.hash(password, 12);
 
     const existingUser = await prisma.user.findUnique({
-      where: { email }
+      where: { whatsapp }
     });
 
     if (existingUser) {
       await prisma.user.update({
-        where: { email },
+        where: { whatsapp },
         data: { role: "ADMIN" }
       });
-      return NextResponse.json({ message: "User admin@padelgo.com sudah ada dan kini di-set sebagai ADMIN", password: "admin123" });
+      return NextResponse.json({ message: `User ${whatsapp} sudah ada dan kini di-set sebagai ADMIN`, password: "admin123" });
     }
 
     await prisma.user.create({
       data: {
-        email,
+        whatsapp,
         name: "Super Admin",
         password: hashedPassword,
         role: "ADMIN"
@@ -31,7 +31,7 @@ export async function GET() {
 
     return NextResponse.json({ 
       message: "Admin Default Berhasil Dibuat!",
-      email: email,
+      whatsapp: whatsapp,
       password: password,
       note: "Silakan login menggunakan kredensial di atas."
     });
