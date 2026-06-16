@@ -1,14 +1,29 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { fetchJson } from "@/lib/fetchJson";
+import { ImageCarousel } from "@/components/ui/ImageCarousel";
+import ClubAmenities from "@/components/ClubAmenities";
+import Footer from "@/components/Footer";
 
 const FEATURES = [
   {
     icon: (
-      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+      <svg
+        width="28"
+        height="28"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      >
+        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+        <polyline points="22 4 12 14.01 9 11.01" />
+      </svg>
     ),
     title: "Tanpa Double Booking",
     desc: "Sistem otomatis mengunci slot yang sudah dipesan. Tidak ada lagi tabrakan jadwal atau konfirmasi manual.",
@@ -16,7 +31,17 @@ const FEATURES = [
   },
   {
     icon: (
-      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+      <svg
+        width="28"
+        height="28"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      >
+        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+      </svg>
     ),
     title: "Booking Super Cepat",
     desc: "Pilih lapangan, tanggal, dan jam dalam hitungan detik. Tidak perlu telepon, tidak perlu chat.",
@@ -24,7 +49,18 @@ const FEATURES = [
   },
   {
     icon: (
-      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+      <svg
+        width="28"
+        height="28"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      >
+        <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+        <line x1="12" y1="18" x2="12.01" y2="18" />
+      </svg>
     ),
     title: "Mobile Friendly",
     desc: "Dirancang mobile-first. Nyaman dipakai dari HP saat di lapangan, di jalan, atau di mana saja.",
@@ -32,7 +68,18 @@ const FEATURES = [
   },
   {
     icon: (
-      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      <svg
+        width="28"
+        height="28"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <polyline points="12 6 12 12 16 14" />
+      </svg>
     ),
     title: "Jadwal Real-Time",
     desc: "Ketersediaan slot selalu update secara langsung. Kamu tahu persis jam mana yang masih kosong.",
@@ -40,15 +87,372 @@ const FEATURES = [
   },
 ];
 
+function FacilityCarousel({ courts, loading }: { courts: any[]; loading: boolean }) {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [modalImg, setModalImg] = useState<string | null>(null);
+  const [isVisible, setIsVisible] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleGlobalPrev = () => handlePrev();
+    const handleGlobalNext = () => handleNext();
+    
+    const prevBtn = document.getElementById('facility-prev');
+    const nextBtn = document.getElementById('facility-next');
+    
+    if (prevBtn) prevBtn.addEventListener('click', handleGlobalPrev);
+    if (nextBtn) nextBtn.addEventListener('click', handleGlobalNext);
+    
+    return () => {
+      if (prevBtn) prevBtn.removeEventListener('click', handleGlobalPrev);
+      if (nextBtn) nextBtn.removeEventListener('click', handleGlobalNext);
+    };
+  }, [activeIndex]);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true);
+          observer.unobserve(entry.target);
+        }
+      },
+      { threshold: 0.2, rootMargin: "0px 0px -50px 0px" }
+    );
+
+    if (containerRef.current) observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  const items = useMemo(() => {
+    const fallbacks = [
+      "https://images.unsplash.com/photo-1622228589094-1a3eb6ce28fb?q=80&w=1400&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1554068865-c3ce14d12753?q=80&w=1400&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1540497077202-7c8a3999166f?q=80&w=1400&auto=format&fit=crop",
+    ];
+    const categories = ["PREMIUM COURT", "INDOOR ARENA", "SIGNATURE COURT"];
+
+    if (!loading && courts && courts.length > 0) {
+      return courts.map((c, i) => {
+        const imageUrl = c.images?.[0]?.url || (typeof c.images?.[0] === "string" ? c.images[0] : null) || c.image;
+        const raw = c.description || "";
+        const desc = raw.length > 55 ? raw.substring(0, 55).trim() + "…" : raw || (c.location === "Indoor" ? "Designed for competitive modern play" : "Professional-grade open-air experience");
+        return { id: c.id, category: categories[i % categories.length], title: c.name, desc, img: imageUrl || fallbacks[i % fallbacks.length] };
+      });
+    }
+    return [
+      { id: "f1", category: "PREMIUM COURT", title: "Panoramic Court", desc: "Designed for competitive modern players", img: fallbacks[0] },
+      { id: "f2", category: "INDOOR ARENA", title: "Match Arena", desc: "Professional-grade indoor atmosphere", img: fallbacks[1] },
+      { id: "f3", category: "SIGNATURE COURT", title: "Open-Air Experience", desc: "Breathtaking outdoor social environment", img: fallbacks[2] },
+    ];
+  }, [courts, loading]);
+  const handleNext = () => setActiveIndex((p) => p + 1);
+  const handlePrev = () => setActiveIndex((p) => p - 1);
+  const offsets = [-1, 0, 1, 2];
+
+  const [isDragging, setIsDragging] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const [dragOffset, setDragOffset] = useState(0);
+
+  const handleDragStart = (e: React.MouseEvent | React.TouchEvent) => {
+    setIsDragging(true);
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    setStartX(clientX);
+  };
+
+  const handleDragMove = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!isDragging) return;
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const deltaX = clientX - startX;
+    setDragOffset(deltaX);
+  };
+
+  const handleDragEnd = () => {
+    if (!isDragging) return;
+    if (dragOffset < -100) handleNext();
+    else if (dragOffset > 100) handlePrev();
+    
+    setIsDragging(false);
+    setDragOffset(0);
+  };
+
+  if (loading) return <div className="w-full h-[480px] bg-white/5 rounded-[2rem] animate-pulse" />;
+
+  return (
+    <>
+      {/* ── Image Lightbox Modal ── */}
+      {modalImg && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 backdrop-blur-2xl"
+          style={{ animation: "facilityFadeIn 0.4s ease-out" }}
+          onClick={() => setModalImg(null)}
+        >
+          <div
+            className="relative max-w-5xl w-full mx-6"
+            style={{ animation: "facilityScaleIn 0.5s cubic-bezier(0.2, 1, 0.3, 1)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img src={modalImg} className="w-full rounded-[2.5rem] shadow-[0_40px_100px_rgba(0,0,0,0.9)] object-cover max-h-[85vh] border border-white/10" />
+            <button
+              onClick={() => setModalImg(null)}
+              className="absolute -top-6 -right-6 w-12 h-12 rounded-full bg-white/10 backdrop-blur-xl border border-white/20 flex items-center justify-center text-white hover:bg-neon hover:text-black transition-all hover:scale-110 shadow-2xl"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+            </button>
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        @keyframes facilityFadeIn  { from { opacity:0 } to { opacity:1 } }
+        @keyframes facilityScaleIn { from { opacity:0; transform:scale(0.95); filter: blur(10px) } to { opacity:1; transform:scale(1); filter: blur(0) } }
+      `}</style>
+
+      {/* ── Carousel Outer Wrapper ── */}
+      <div className="relative w-full overflow-visible group/carousel">
+        {/* ── Carousel track ── */}
+        <div
+          ref={containerRef}
+          className="relative w-full cursor-grab active:cursor-grabbing"
+          style={{ height: 480 }}
+          onMouseDown={handleDragStart}
+          onMouseMove={handleDragMove}
+          onMouseUp={handleDragEnd}
+          onMouseLeave={handleDragEnd}
+          onTouchStart={handleDragStart}
+          onTouchMove={handleDragMove}
+          onTouchEnd={handleDragEnd}
+        >
+          <div className="absolute inset-0">
+            {offsets.map((offset) => {
+              const absIdx = activeIndex + offset;
+              const itemIdx = ((absIdx % items.length) + items.length) % items.length;
+              const item = items[itemIdx];
+              const isActive = offset === 0;
+
+              const styleMap = {
+                [-1]: { tx: "-18%", scale: 0.82, opacity: 0.18, zIndex: 8 },
+                [0]: { tx: "0%", scale: 1, opacity: 1, zIndex: 20 },
+                [1]: { tx: "62%", scale: 0.88, opacity: 0.72, zIndex: 15 },
+                [2]: { tx: "105%", scale: 0.8, opacity: 0.12, zIndex: 8 },
+              };
+              const { tx, scale, opacity, zIndex } = styleMap[offset] ?? { tx: "120%", scale: 0.7, opacity: 0, zIndex: 5 };
+
+              return (
+                <div
+                  key={absIdx}
+                  className="absolute top-0 w-[360px] md:w-[440px] h-[480px] rounded-[2.5rem] overflow-hidden shadow-[0_32px_80px_-20px_rgba(0,0,0,0.9)] pointer-events-none select-none"
+                  style={{
+                    transform: `translateX(${tx}) scale(${scale})`,
+                    opacity: (isActive || offset === 1 || offset === -1) ? (isActive ? 1 : opacity) : 0,
+                    zIndex,
+                    transformOrigin: "left center",
+                    transition: "transform 1s cubic-bezier(0.2, 1, 0.2, 1), opacity 0.8s ease",
+                  }}
+                >
+                  {/* ── STABLE IMAGE WRAPPER ── */}
+                  <div 
+                    className="relative w-full h-full bg-[#111] overflow-hidden pointer-events-auto"
+                    onClick={() => {
+                      if (!isDragging && Math.abs(dragOffset) < 10) {
+                        if (offset === 1) handleNext();
+                        else if (isActive) setModalImg(item.img);
+                      }
+                    }}
+                  >
+                    <img
+                      src={item.img}
+                      alt={item.title}
+                      className="w-full h-full object-cover block pointer-events-none"
+                      draggable={false}
+                    />
+                    
+                    {/* Subtle Readable Gradient (Bottom Only) */}
+                    <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/90 via-black/30 to-transparent pointer-events-none" />
+
+                    {/* ── CONTENT OVERLAY ── */}
+                    <div className="absolute inset-0 p-10 flex flex-col justify-between pointer-events-none">
+                      {/* Top Badge */}
+                      <div className={`transition-all duration-700 ${isActive ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-4"}`}>
+                        <span className="inline-block px-5 py-2 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-[10px] font-bold text-white uppercase tracking-[0.3em]">
+                          {item.category}
+                        </span>
+                      </div>
+
+                      {/* Bottom Info */}
+                      <div className={`transition-all duration-700 delay-100 ${isActive ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
+                        <h3 className="text-4xl md:text-5xl font-black text-white tracking-tighter mb-3 leading-[0.9]">{item.title}</h3>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function FacilitiesSection({ courts, loading }: { courts: any[]; loading: boolean }) {
+  const [isVisible, setIsVisible] = useState(false);
+  const sectionRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true);
+          observer.unobserve(entry.target);
+        }
+      },
+      { threshold: 0.15 }
+    );
+
+    if (sectionRef.current) observer.observe(sectionRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <section
+      ref={sectionRef}
+      className="py-24 md:py-32 relative overflow-hidden bg-[#0B0B0B] border-y border-white/5"
+      id="facilities"
+    >
+      {/* Soft Background Glow */}
+      <div
+        className="absolute top-1/2 left-0 -translate-y-1/2 w-[800px] h-[800px] bg-neon/5 blur-[150px] rounded-full pointer-events-none -z-10 transition-opacity duration-[2000ms]"
+        style={{ opacity: isVisible ? 0.3 : 0 }}
+      ></div>
+
+      <div className="max-w-[1400px] mx-auto px-6 md:px-12 relative z-10 flex flex-col xl:flex-row gap-16 xl:gap-20 items-center xl:items-start">
+
+        {/* LEFT SIDE: Content Anchor */}
+        <div className="w-full xl:w-[450px] shrink-0 flex flex-col items-start text-left xl:-mt-8">
+          {/* Upgraded Premium Badge */}
+          <div
+            className="inline-flex items-center px-5 py-2.5 rounded-full bg-white/[0.03] border border-white/10 mb-10 backdrop-blur-xl shadow-[0_0_20px_rgba(215,255,63,0.1)] group transition-all duration-1000"
+            style={{
+              opacity: isVisible ? 1 : 0,
+              transform: isVisible ? "translateY(0)" : "translateY(20px)",
+              filter: isVisible ? "blur(0)" : "blur(8px)",
+              transitionDelay: "0.1s"
+            }}
+          >
+            <span className="text-[11px] font-bold uppercase tracking-[0.3em] text-white/90">
+              Premium <span className="text-neon group-hover:drop-shadow-[0_0_8px_rgba(215,255,63,0.5)] transition-all">Facilities</span>
+            </span>
+          </div>
+
+          <h2
+            className="text-6xl md:text-7xl font-black text-white leading-[1.02] tracking-tighter mb-10 transition-all duration-1000"
+            style={{
+              opacity: isVisible ? 1 : 0,
+              transform: isVisible ? "translateY(0)" : "translateY(20px)",
+              filter: isVisible ? "blur(0)" : "blur(10px)",
+              transitionDelay: "0.25s"
+            }}
+          >
+            Elevate Your<br />
+            <span className="text-neon drop-shadow-[0_0_20px_rgba(215,255,63,0.35)]">Game.</span>
+          </h2>
+
+          <p
+            className="text-white/60 text-xl leading-relaxed mb-12 font-medium max-w-md xl:max-w-sm transition-all duration-1000"
+            style={{
+              opacity: isVisible ? 1 : 0,
+              transform: isVisible ? "translateY(0)" : "translateY(20px)",
+              filter: isVisible ? "blur(0)" : "blur(8px)",
+              transitionDelay: "0.4s"
+            }}
+          >
+            Experience padel at its finest. Our international standard courts and exclusive amenities are designed for the modern athlete who demands perfection.
+          </p>
+
+          <Link href="/booking">
+            <div
+              className="transition-all duration-1000"
+              style={{
+                opacity: isVisible ? 1 : 0,
+                transform: isVisible ? "translateY(0)" : "translateY(20px)",
+                filter: isVisible ? "blur(0)" : "blur(6px)",
+                transitionDelay: "0.55s"
+              }}
+            >
+              <button className="bg-white/5 hover:bg-white/10 border border-white/10 text-white px-10 py-5 rounded-full font-bold text-[13px] tracking-[0.25em] uppercase transition-all duration-500 backdrop-blur-xl flex items-center gap-5 group shadow-xl hover:shadow-neon/10">
+                Reserve Now
+                <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center group-hover:bg-neon group-hover:text-black transition-all duration-500 group-hover:scale-110">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform">
+                    <line x1="5" y1="19" x2="19" y2="5"></line>
+                    <polyline points="9 5 19 5 19 15"></polyline>
+                  </svg>
+                </div>
+              </button>
+            </div>
+          </Link>
+        </div>
+
+        {/* RIGHT SIDE: Horizontal Showcase */}
+        <div className="w-full xl:flex-1 relative flex flex-col md:block">
+          <FacilityCarousel courts={courts} loading={loading} />
+          
+          {/* ── NAVIGATION CONTROLS (RESPONSIVE POSITIONING) ── */}
+          <div
+            className="md:absolute relative mt-12 md:mt-0 md:-bottom-2 md:right-6 flex justify-center md:justify-start gap-4 z-[200] transition-all duration-1000"
+            style={{
+              opacity: isVisible ? 1 : 0,
+              transform: isVisible ? "translateY(0)" : "translateY(20px)",
+              transitionDelay: "1s"
+            }}
+          >
+            <button 
+              id="facility-prev"
+              className="w-14 h-14 rounded-full bg-black/60 border border-white/10 backdrop-blur-2xl flex items-center justify-center text-white transition-all duration-500 hover:bg-neon hover:text-black hover:border-neon hover:scale-110 shadow-2xl active:scale-95 group"
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="group-hover:-translate-x-0.5 transition-transform"><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg>
+            </button>
+            <button 
+              id="facility-next"
+              className="w-14 h-14 rounded-full bg-black/60 border border-white/10 backdrop-blur-2xl flex items-center justify-center text-white transition-all duration-500 hover:bg-neon hover:text-black hover:border-neon hover:scale-110 shadow-2xl active:scale-95 group"
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="group-hover:translate-x-0.5 transition-transform"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function Home() {
+  const { data: session } = useSession();
   const [courts, setCourts] = useState<
-    { id: string; name: string; location: string; pricePerHour: number; image?: string | null }[]
+    {
+      id: string;
+      name: string;
+      location: string;
+      pricePerHour: number;
+      images?: any[] | null;
+      image?: string | null;
+      description?: string | null;
+    }[]
   >([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    fetchJson<{ id: string; name: string; location: string; pricePerHour: number; image?: string | null }[]>("/api/courts")
+    fetchJson<
+      {
+        id: string;
+        name: string;
+        location: string;
+        pricePerHour: number;
+        images?: any[] | null;
+        image?: string | null;
+        description?: string | null;
+      }[]
+    >("/api/courts")
       .then((data) => {
         if (!Array.isArray(data)) throw new Error("Invalid response");
         setCourts(data);
@@ -56,7 +460,9 @@ export default function Home() {
       .catch((err) => {
         console.error("Error fetching courts Home:", err);
         setCourts([]);
-        setError("Gagal memuat data lapangan. Pastikan backend & database sudah siap.");
+        setError(
+          "Gagal memuat data lapangan. Pastikan backend & database sudah siap.",
+        );
       })
       .finally(() => setLoading(false));
   }, []);
@@ -65,257 +471,188 @@ export default function Home() {
     <div className="flex flex-col min-h-screen">
 
       {/* ===================== */}
-      {/* HERO — Video Background */}
+      {/* HERO — Cinematic Video */}
       {/* ===================== */}
-      <section className="relative min-h-[92vh] flex items-center justify-center overflow-hidden">
-        <video
-          autoPlay muted loop playsInline
-          className="absolute inset-0 w-full h-full object-cover z-0"
-          poster="/images/hero-padel.jpg"
-        >
-          <source src="/videos/hero.mp4" type="video/mp4" />
-        </video>
-        <div className="absolute inset-0 z-10 bg-gradient-to-b from-slate-900/75 via-slate-900/55 to-slate-900/85"></div>
+      <section className="relative min-h-[100svh] flex items-center justify-start overflow-hidden pt-20 pb-8">
+        {/* Background Video */}
+        <div className="absolute inset-0 z-0">
+          <video
+            autoPlay
+            muted
+            loop
+            playsInline
+            className="w-full h-full object-cover opacity-70"
+            poster="/images/hero-padel.jpg"
+          >
+            <source src="/videos/hero.mp4" type="video/mp4" />
+          </video>
+          {/* Dark Overlay Gradient */}
+          <div className="absolute inset-0 bg-gradient-to-r from-[#0B0B0B] via-[#0B0B0B]/80 to-transparent"></div>
+          <div className="absolute inset-0 bg-gradient-to-t from-[#0B0B0B] via-transparent to-transparent"></div>
+        </div>
 
-        <div className="relative z-20 max-w-5xl mx-auto px-6 text-center flex flex-col items-center py-24">
-          <div className="hero-badge inline-flex items-center gap-2 px-4 py-2 rounded-full border border-blue-400/30 bg-blue-500/20 backdrop-blur-md text-sm text-blue-200 font-bold mb-8">
-            <span className="flex h-2.5 w-2.5 relative">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-400"></span>
-            </span>
-            PadelGo is Live in Semarang
+        {/* Content Container */}
+        <div className="relative z-10 w-full max-w-[1400px] mx-auto px-6 md:px-12 flex flex-col justify-center h-full">
+
+          <div className="max-w-2xl w-full relative">
+
+            {/* Soft Cinematic Ambient Glow Behind Text */}
+            <div className="absolute top-[40%] left-[20%] -translate-y-1/2 -translate-x-1/2 w-[800px] h-[800px] bg-black/50 blur-[140px] rounded-full pointer-events-none -z-10"></div>
+            <div className="absolute top-[40%] left-[20%] -translate-y-1/2 -translate-x-1/2 w-[500px] h-[500px] bg-neon/15 blur-[160px] rounded-full pointer-events-none -z-10"></div>
+
+            {/* Live Badge */}
+            <div className="inline-flex items-center gap-3 px-5 py-2 rounded-full bg-transparent border border-white/10 mb-6 backdrop-blur-md animate-fade-in-up">
+              <div className="relative flex items-center justify-center w-2 h-2">
+                <span className="animate-[pulse_3s_ease-in-out_infinite] absolute inline-flex h-full w-full rounded-full bg-neon opacity-60"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-neon shadow-[0_0_8px_#D7FF3F]"></span>
+              </div>
+              <span className="text-[10.5px] font-semibold uppercase tracking-[0.25em] text-white/75">
+                PadelGo is Live in Semarang
+              </span>
+            </div>
+
+            {/* Headline */}
+            <h1 className="font-sans font-medium leading-[1.08] tracking-tight text-white mb-4 text-6xl md:text-7xl lg:text-[80px] animate-cinematic-reveal">
+              Play <span className="text-neon drop-shadow-[0_0_20px_rgba(215,255,63,0.3)]">Smarter.</span><br />
+              Book <span className="text-neon drop-shadow-[0_0_20px_rgba(215,255,63,0.3)]">Faster.</span>
+            </h1>
+
+            {/* Supporting Description */}
+            <p className="text-base md:text-lg font-normal leading-relaxed mb-8 text-white/70 max-w-lg animate-cinematic-reveal-soft [animation-delay:200ms]">
+              Experience the first premium padel booking platform in Semarang. Real-time availability. Instant confirmation. Zero friction.
+            </p>
+
+            {/* CTA Buttons */}
+            <div className="flex flex-col sm:flex-row items-center gap-4 animate-fade-in-up [animation-delay:400ms]">
+              <Link href="/booking" className="w-full sm:w-auto">
+                <button className="w-full sm:w-auto bg-neon hover:bg-neon-hover text-black pl-8 pr-3 h-[56px] rounded-full font-bold text-[14px] transition-all duration-300 flex items-center justify-between gap-8 group shadow-[0_0_30px_rgba(215,255,63,0.2)] hover:shadow-[0_0_40px_rgba(215,255,63,0.4)]">
+                  Book A Court
+                  <div className="w-10 h-10 rounded-full bg-black flex items-center justify-center group-hover:scale-105 transition-transform">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-neon">
+                      <line x1="5" y1="19" x2="19" y2="5"></line>
+                      <polyline points="9 5 19 5 19 15"></polyline>
+                    </svg>
+                  </div>
+                </button>
+              </Link>
+
+              <Link href="#facilities" className="w-full sm:w-auto">
+                <button className="w-full sm:w-auto bg-transparent hover:bg-white/5 text-white border border-white/20 pl-8 pr-6 h-[56px] rounded-full font-bold text-[14px] transition-all duration-300 backdrop-blur-md flex items-center justify-between gap-4 group">
+                  Explore Facility
+                  <div className="flex items-center justify-center group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-white/70">
+                      <line x1="5" y1="19" x2="19" y2="5"></line>
+                      <polyline points="9 5 19 5 19 15"></polyline>
+                    </svg>
+                  </div>
+                </button>
+              </Link>
+            </div>
           </div>
 
-          <div className="hero-line1 text-5xl md:text-8xl font-black tracking-tighter leading-[1.1] text-white drop-shadow-lg">
-            Book your court.
-          </div>
-          <div className="hero-line2 text-5xl md:text-8xl font-black tracking-tighter leading-[1.1] mb-8 gradient-text drop-shadow-lg pb-2">
-            Play your game.
+          {/* 3 Horizontal Supporting Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full mt-10 animate-fade-in-up [animation-delay:600ms]">
+            {/* Card 1: White */}
+            <div className="group bg-white rounded-3xl p-6 flex items-center justify-between shadow-lg transition-all duration-500 ease-out hover:-translate-y-1 cursor-default relative overflow-hidden">
+              <div className="flex items-center gap-4 relative z-10">
+                <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center shrink-0">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-900"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                </div>
+                <div>
+                  <div className="font-sans font-bold text-black text-xl tracking-tight leading-none mb-1">10,000+</div>
+                  <div className="font-sans text-gray-500 text-sm font-medium">Active Players</div>
+                </div>
+              </div>
+              <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center group-hover:bg-gray-200 transition-colors relative z-10">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-black">
+                  <line x1="5" y1="19" x2="19" y2="5"></line>
+                  <polyline points="9 5 19 5 19 15"></polyline>
+                </svg>
+              </div>
+            </div>
+
+            {/* Card 2: Glassmorphism */}
+            <div className="group bg-white/5 border border-white/10 backdrop-blur-xl rounded-3xl p-6 flex items-center justify-between transition-all duration-500 ease-out hover:-translate-y-1 hover:bg-white/10 cursor-default">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-black/40 rounded-full flex items-center justify-center shrink-0 shadow-[0_0_15px_rgba(0,0,0,0.5)]">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-neon"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                </div>
+                <div>
+                  <div className="font-sans font-bold text-white text-xl tracking-tight leading-none mb-1">Real-Time</div>
+                  <div className="font-sans text-white/60 text-sm font-medium">Live Slot Sync</div>
+                </div>
+              </div>
+              <div className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center group-hover:bg-white/10 transition-colors">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-white">
+                  <line x1="5" y1="19" x2="19" y2="5"></line>
+                  <polyline points="9 5 19 5 19 15"></polyline>
+                </svg>
+              </div>
+            </div>
+
+            {/* Card 3: Neon */}
+            <div className="group bg-neon rounded-3xl p-6 flex items-center justify-between shadow-[0_0_30px_rgba(215,255,63,0.15)] transition-all duration-500 ease-out hover:-translate-y-1 hover:shadow-[0_10px_40px_-10px_rgba(215,255,63,0.4)] cursor-default">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-black rounded-full flex items-center justify-center shrink-0">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-neon"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
+                </div>
+                <div>
+                  <div className="font-sans font-bold text-black text-xl tracking-tight leading-none mb-1">3 Courts</div>
+                  <div id="premium-facilities" className="font-sans text-black/70 text-sm font-medium">Premium Quality</div>
+                </div>
+              </div>
+              <div className="w-10 h-10 rounded-full bg-black/10 flex items-center justify-center group-hover:bg-black/20 transition-colors">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-black">
+                  <line x1="5" y1="19" x2="19" y2="5"></line>
+                  <polyline points="9 5 19 5 19 15"></polyline>
+                </svg>
+              </div>
+            </div>
           </div>
 
-          <p className="hero-subtitle text-lg md:text-xl text-slate-300 font-medium max-w-2xl mx-auto mb-10 leading-relaxed">
-            Platform booking lapangan padel paling simpel. Cek jadwal, pilih jam, langsung main. Tanpa ribet, tanpa telepon.
-          </p>
+        </div>
+      </section>
 
-          <div className="hero-cta flex items-center justify-center w-full sm:w-auto">
-            <Link href="/booking" className="w-full sm:w-auto">
-              <button className="w-full sm:w-auto text-lg font-bold text-white bg-blue-600 px-10 py-4 rounded-2xl transition-all duration-300 hover:bg-blue-500 hover:scale-105 hover:shadow-[0_12px_40px_-4px_rgba(59,130,246,0.7)] active:scale-95 shadow-[0_8px_30px_-4px_rgba(59,130,246,0.5)]">
-                Book Now →
+      {/* ===================== */}
+      {/* FACILITIES SHOWCASE (Refactored) */}
+      {/* ===================== */}
+      <FacilitiesSection courts={courts} loading={loading} />
+
+      {/* ===================== */}
+      {/* SECTION 5 — CLUB AMENITIES (Redesigned) */}
+      {/* ===================== */}
+      <ClubAmenities />
+
+      {/* ===================== */}
+      {/* SECTION 6 — PROMO CTA */}
+      {/* ===================== */}
+      <section className="py-12 px-4 md:px-8 max-w-[1400px] mx-auto w-full mb-24">
+        <div className="bg-neon rounded-[3rem] p-12 md:p-20 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-10 shadow-[0_0_100px_rgba(215,255,63,0.15)]">
+          <div className="absolute -left-20 -top-20 w-96 h-96 bg-white/20 blur-3xl rounded-full"></div>
+
+          <div className="relative z-10 max-w-2xl">
+            <h2 className="text-4xl md:text-6xl font-display font-black text-black leading-[1.1] mb-6 tracking-tight">
+              Get Premium Match Experience.
+            </h2>
+            <p className="text-black/70 font-bold text-lg md:text-xl">
+              Join the most exclusive padel community in Semarang. Book your first session today and elevate your game.
+            </p>
+          </div>
+
+          <div className="relative z-10 w-full md:w-auto shrink-0">
+            <Link href="/register">
+              <button className="w-full md:w-auto bg-black text-white font-display font-bold text-sm tracking-widest uppercase px-10 py-5 rounded-full hover:scale-105 transition-transform duration-300">
+                Create Account
               </button>
             </Link>
           </div>
         </div>
-
-        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-20 hero-cta">
-          <div className="w-6 h-10 border-2 border-white/20 rounded-full flex justify-center pt-2">
-            <div className="w-1 h-2.5 bg-white/50 rounded-full animate-bounce"></div>
-          </div>
-        </div>
       </section>
 
       {/* ===================== */}
-      {/* COURTS LIST */}
+      {/* FOOTER                */}
       {/* ===================== */}
-      <section className="py-20 bg-white" id="facilities">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl font-extrabold text-slate-900 mb-4">Fasilitas Premium</h2>
-            <p className="text-slate-500 font-medium">Nikmati pengalaman bermain di lapangan padel berstandar internasional di Semarang.</p>
-          </div>
-          
-          <div className="grid md:grid-cols-3 gap-8">
-            {error && (
-              <div className="col-span-full p-4 bg-red-50 border border-red-200 rounded-2xl text-sm font-bold text-red-700">
-                {error}
-              </div>
-            )}
-            {loading ? (
-              Array.from({length: 3}).map((_, i) => (
-                <div key={i} className="h-96 rounded-[2rem] bg-slate-100 animate-pulse border border-slate-100"></div>
-              ))
-            ) : (
-              courts.map((court) => (
-                <div key={court.id} className="group flex flex-col bg-white rounded-[2rem] border border-slate-100 overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-2 transition-all duration-300">
-                  <div className="h-52 w-full relative overflow-hidden">
-                    <img 
-                      src={court.image || "/images/court-1.jpg"} 
-                      alt={court.name} 
-                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-slate-900/40 to-transparent"></div>
-                    <div className="absolute bottom-4 left-4 text-white text-xs font-bold bg-black/30 backdrop-blur-md px-3 py-1.5 rounded-lg">
-                      {court.location}
-                    </div>
-                  </div>
-                  <div className="p-6 md:p-8 flex-1 flex flex-col">
-                    <h3 className="text-xl font-black text-slate-900 mb-2 group-hover:text-blue-600 transition-colors">
-                      {court.name}
-                    </h3>
-                    <p className="text-slate-500 font-medium text-sm mb-6 flex-1 leading-relaxed">
-                      Booking lapangan ini langsung dari aplikasi.
-                    </p>
-                    <div className="flex items-center justify-between mt-auto pt-4 border-t border-slate-100">
-                      <span className="text-lg font-extrabold text-slate-900">
-                        Rp {Number(court.pricePerHour || 0).toLocaleString('id-ID')}{" "}
-                        <span className="text-sm text-slate-400 font-medium">/ jam</span>
-                      </span>
-                      <Link href={`/booking?courtId=${court.id}`}>
-                        <Button size="sm" variant="secondary">Cek Jadwal</Button>
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-            {!loading && courts.length === 0 && (
-              <div className="col-span-full py-20 text-center text-slate-400 font-bold">Belum ada data lapangan tersedia.</div>
-            )}
-          </div>
-        </div>
-      </section>
-
-      {/* ===================== */}
-      {/* CARA BOOKING */}
-      {/* ===================== */}
-      <section className="py-20 bg-slate-50">
-        <div className="max-w-4xl mx-auto px-6 text-center">
-          <h2 className="text-4xl font-extrabold text-slate-900 mb-4">Cara Booking</h2>
-          <p className="text-slate-500 font-medium mb-16">3 langkah mudah, langsung main.</p>
-          <div className="grid md:grid-cols-3 gap-10">
-            {[
-              { step: "1", title: "Pilih Lapangan", desc: "Lihat fasilitas dan harga masing-masing court." },
-              { step: "2", title: "Pilih Jadwal", desc: "Tentukan tanggal dan jam sesuai ketersediaan." },
-              { step: "3", title: "Konfirmasi & Bayar", desc: "Selesaikan pembayaran, jadwalmu otomatis terkunci." },
-            ].map((item) => (
-              <div key={item.step} className="flex flex-col items-center">
-                <div className="w-14 h-14 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center font-black text-2xl mb-5 shadow-inner">{item.step}</div>
-                <h3 className="text-lg font-black text-slate-900 mb-2">{item.title}</h3>
-                <p className="text-slate-500 font-medium text-sm leading-relaxed">{item.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ===================== */}
-      {/* KEUNGGULAN / FEATURES */}
-      {/* ===================== */}
-      <section className="py-20 bg-white">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="text-center mb-16">
-            <span className="inline-block text-xs font-black uppercase tracking-widest text-blue-600 bg-blue-50 px-4 py-2 rounded-full mb-4">Kenapa PadelGo?</span>
-            <h2 className="text-4xl font-extrabold text-slate-900 mb-4">Lebih Cepat, Lebih Mudah</h2>
-            <p className="text-slate-500 font-medium max-w-xl mx-auto">Kami hadir untuk menggantikan cara lama booking lewat WA yang ribet dan rawan double booking.</p>
-          </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {FEATURES.map((f, i) => (
-              <div key={i} className="group bg-slate-50 hover:bg-white border border-slate-100 hover:border-slate-200 rounded-[2rem] p-8 flex flex-col gap-4 transition-all duration-300 hover:shadow-lg hover:-translate-y-1">
-                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${f.color} transition-transform duration-300 group-hover:scale-110`}>
-                  {f.icon}
-                </div>
-                <h3 className="text-lg font-black text-slate-900">{f.title}</h3>
-                <p className="text-slate-500 font-medium text-sm leading-relaxed">{f.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ===================== */}
-      {/* CTA SECTION PENUTUP  */}
-      {/* ===================== */}
-      <section className="py-24 bg-gradient-to-br from-blue-600 to-blue-800 relative overflow-hidden">
-        {/* Dekorasi background */}
-        <div className="absolute -top-24 -right-24 w-96 h-96 bg-blue-500/30 rounded-full blur-3xl pointer-events-none"></div>
-        <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-blue-700/40 rounded-full blur-3xl pointer-events-none"></div>
-
-        <div className="relative z-10 max-w-3xl mx-auto px-6 text-center">
-          <h2 className="text-4xl md:text-5xl font-black text-white mb-5 leading-tight tracking-tight">
-            Siap main padel hari ini?
-          </h2>
-          <p className="text-blue-100 font-medium text-lg mb-10 leading-relaxed">
-            Jangan sampai kehabisan lapangan favorit kamu. Booking sekarang dan amankan jadwalmu dalam 30 detik.
-          </p>
-          <Link href="/booking">
-            <button className="bg-white text-blue-700 font-black text-lg px-12 py-5 rounded-2xl transition-all duration-300 hover:bg-blue-50 hover:scale-105 hover:shadow-[0_16px_50px_-8px_rgba(0,0,0,0.25)] active:scale-95 shadow-xl">
-              Booking Sekarang →
-            </button>
-          </Link>
-        </div>
-      </section>
-
-      {/* ===================== */}
-      {/* FOOTER LENGKAP        */}
-      {/* ===================== */}
-      <footer className="bg-slate-900 text-slate-400">
-        <div className="max-w-6xl mx-auto px-6 py-16 grid grid-cols-1 md:grid-cols-4 gap-10">
-          
-          {/* Brand */}
-          <div className="md:col-span-1">
-            <span className="font-extrabold text-2xl tracking-tight text-white block mb-3">
-              Padel<span className="text-blue-500">Go</span>
-            </span>
-            <p className="text-sm leading-relaxed text-slate-400">
-              Platform booking lapangan padel #1 di Semarang. Cepat, mudah, dan terpercaya.
-            </p>
-          </div>
-
-          {/* Menu */}
-          <div>
-            <h4 className="text-white font-black text-sm uppercase tracking-widest mb-5">Menu</h4>
-            <ul className="space-y-3 text-sm">
-              <li><Link href="/" className="hover:text-white transition-colors">Beranda</Link></li>
-              <li><Link href="/booking" className="hover:text-white transition-colors">Booking Lapangan</Link></li>
-              <li><Link href="/dashboard" className="hover:text-white transition-colors">Dashboard</Link></li>
-              <li><Link href="/login" className="hover:text-white transition-colors">Login / Daftar</Link></li>
-            </ul>
-          </div>
-
-          {/* Kontak */}
-          <div>
-            <h4 className="text-white font-black text-sm uppercase tracking-widest mb-5">Kontak</h4>
-            <ul className="space-y-3 text-sm">
-              <li className="flex items-start gap-2">
-                <svg className="w-4 h-4 mt-0.5 shrink-0 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                <span>Jl. Padel Raya No. 12,<br />Banyumanik, Semarang 50268</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <svg className="w-4 h-4 shrink-0 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
-                <span>+62 812-3456-7890</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <svg className="w-4 h-4 shrink-0 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
-                <span>hello@padelgo.id</span>
-              </li>
-            </ul>
-          </div>
-
-          {/* Sosmed */}
-          <div>
-            <h4 className="text-white font-black text-sm uppercase tracking-widest mb-5">Ikuti Kami</h4>
-            <div className="flex flex-col gap-3">
-              {[
-                { name: "Instagram", handle: "@padelgo.semarang", href: "#" },
-                { name: "TikTok", handle: "@padelgo.id", href: "#" },
-                { name: "WhatsApp", handle: "Chat Admin", href: "#" },
-              ].map((s) => (
-                <a key={s.name} href={s.href} className="flex items-center gap-3 group">
-                  <span className="text-xs font-bold text-slate-500 group-hover:text-white transition-colors w-20">{s.name}</span>
-                  <span className="text-xs text-blue-400 group-hover:text-blue-300 transition-colors font-bold">{s.handle}</span>
-                </a>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Bottom bar */}
-        <div className="border-t border-slate-800">
-          <div className="max-w-6xl mx-auto px-6 py-5 flex flex-col md:flex-row items-center justify-between gap-2">
-            <p className="text-xs text-slate-500">© 2026 PadelGo Semarang. All rights reserved.</p>
-            <p className="text-xs text-slate-600">Jadikan setiap rally tak terlupakan. 🎾</p>
-          </div>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }
