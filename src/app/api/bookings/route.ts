@@ -9,8 +9,11 @@ import {
   parseHHmmToMinutes,
   parseSlotToRange,
   coerceDateOnlyUTC,
+  getVirtualStatus,
 } from "@/lib/bookingTime";
 import { getErrorMessage } from "@/lib/errorMessage";
+import { validateBookingMonth } from "@/lib/dateValidation";
+import { createNotification } from "@/lib/notifications";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -65,36 +68,50 @@ function parseBookingTimeRange(body: unknown) {
   return { startTime, endTime };
 }
 
-export async function GET() {
-  console.log("API: Fetching bookings...");
+import { normalizeImages } from "@/lib/courtUtils";
+
+export async function GET(req: Request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session) {
-      console.warn("API: Unauthorized booking fetch attempt.");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const { searchParams } = new URL(req.url);
+    const dateQuery = searchParams.get("date");
+
     const userRole = session.user.role;
     const userId = session.user.id;
-    console.log(`API: Fetching for user ${userId} with role ${userRole}`);
 
-    const expirationCutoff = new Date(Date.now() - 15 * 60 * 1000);
-    await prisma.booking.updateMany({
-      where: { status: "PENDING", createdAt: { lt: expirationCutoff } },
-      data: { status: "EXPIRED" },
-    });
+    const whereClause: any = userRole === "ADMIN" ? {} : { userId };
 
-    const bookings = await prisma.booking.findMany({
-      where: userRole === "ADMIN" ? {} : { userId },
+    if (dateQuery) {
+      const parsedDate = coerceDateOnlyUTC(dateQuery);
+      if (parsedDate) {
+        whereClause.date = parsedDate;
+      }
+    }
+
+    const rawBookings = await prisma.booking.findMany({
+      where: whereClause,
       include: {
-        user: { select: { id: true, name: true, email: true } },
-        court: { select: { id: true, name: true, location: true, pricePerHour: true, image: true } },
+        user: { select: { id: true, name: true, whatsapp: true, membership: true, membershipStatus: true } },
+        court: { select: { id: true, name: true, location: true, pricePerHour: true, images: true } },
         payment: { select: { id: true, status: true, proofImage: true, createdAt: true } },
+        openMatch: { select: { id: true, status: true } },
       },
       orderBy: { createdAt: "desc" },
     });
 
-    console.log(`API: Found ${bookings.length} bookings.`);
+    const bookings = rawBookings.map(b => ({
+      ...b,
+      status: getVirtualStatus(b),
+      court: b.court ? {
+        ...b.court,
+        images: normalizeImages(b.court.images)
+      } : null
+    }));
+
     return NextResponse.json(bookings, { status: 200 });
   } catch (err: unknown) {
     console.error("API Error [GET /api/bookings]:", err);
@@ -110,7 +127,28 @@ export async function POST(req: Request) {
       console.warn("API: Unauthorized booking creation attempt.");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    // Admin tidak boleh booking
+    if (session.user.role === "ADMIN") {
+      console.warn("API: Admin attempt to create booking denied.");
+      return NextResponse.json({ error: "Admin tidak boleh melakukan booking" }, { status: 403 });
+    }
+
     const userId = session.user.id;
+
+    // Verify user still exists in DB (to prevent P2003 if DB was reset)
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, membership: true },
+    });
+
+    if (!user) {
+      console.warn(`API: Session user ${userId} not found in database. Stale session?`);
+      return NextResponse.json(
+        { error: "Sesi tidak valid atau user tidak ditemukan. Silakan logout dan login kembali." },
+        { status: 401 }
+      );
+    }
 
     const body: unknown = await req.json();
     const payload = (body ?? {}) as Record<string, unknown>;
@@ -124,6 +162,11 @@ export async function POST(req: Request) {
     const bookingDate = coerceDateOnlyUTC(String(date));
     if (!bookingDate) {
       return NextResponse.json({ error: "Invalid date. Use YYYY-MM-DD." }, { status: 400 });
+    }
+
+    const monthValidation = validateBookingMonth(bookingDate);
+    if (!monthValidation.valid) {
+      return NextResponse.json({ error: monthValidation.error }, { status: 400 });
     }
 
     const parsed = parseBookingTimeRange(payload);
@@ -144,6 +187,33 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Booking duration must be in full hours" }, { status: 400 });
     }
 
+    // Past time validation
+    const now = new Date();
+    const localDateStr = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    const bookingDateStr = bookingDate.toISOString().split('T')[0];
+    
+    if (bookingDateStr < localDateStr) {
+      return NextResponse.json({ error: "Tidak bisa booking untuk tanggal yang sudah lewat." }, { status: 400 });
+    }
+    if (bookingDateStr === localDateStr && startTime <= nowMinutes) {
+      return NextResponse.json({ error: "Waktu booking sudah terlewat hari ini." }, { status: 400 });
+    }
+
+    // Membership Priority Booking Rule
+    // Reset time to midnight for accurate day difference
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const target = new Date(bookingDate.getFullYear(), bookingDate.getMonth(), bookingDate.getDate());
+    const diffTime = target.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    const maxDays = user.membership === "MEMBER" ? 14 : 7;
+    if (diffDays > maxDays) {
+      return NextResponse.json({ 
+        error: `Upgrade ke MEMBER untuk bisa booking lebih awal (H-${maxDays} vs H-14).` 
+      }, { status: 403 });
+    }
+
     const lockKey = `${courtId}:${bookingDate.toISOString().slice(0, 10)}`;
 
     const created = await prisma.$transaction(async (tx) => {
@@ -152,9 +222,10 @@ export async function POST(req: Request) {
         Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${lockKey})::bigint)`,
       );
 
-      const expirationCutoff = new Date(Date.now() - 15 * 60 * 1000);
+      // Auto-expire PENDING bookings where expiresAt < now
+      const now = new Date();
       await tx.booking.updateMany({
-        where: { status: "PENDING", courtId: String(courtId), date: bookingDate, createdAt: { lt: expirationCutoff } },
+        where: { status: "PENDING", courtId: String(courtId), date: bookingDate, expiresAt: { lt: now } },
         data: { status: "EXPIRED" },
       });
 
@@ -178,10 +249,33 @@ export async function POST(req: Request) {
       }
 
       const durationHours = (endTime - startTime) / 60;
-      const totalPrice = court.pricePerHour * durationHours;
+      let totalPrice = court.pricePerHour * durationHours;
+
+      // Apply Membership Discount (10% for MEMBER)
+      if (user.membership === "MEMBER") {
+        totalPrice = Math.round(totalPrice * 0.9);
+      }
+
+      // Generate bookingCode: PDL-YYYY-NNNN
+      const year = new Date().getFullYear();
+      const count = await tx.booking.count({
+        where: {
+          createdAt: {
+            gte: new Date(`${year}-01-01`),
+            lt: new Date(`${year + 1}-01-01`),
+          },
+        },
+      });
+      const sequence = String(count + 1).padStart(4, "0");
+      const randomSuffix = Math.floor(Math.random() * 1000).toString().padStart(3, "0");
+      const bookingCode = `PDL-${year}-${sequence}-${randomSuffix}`;
+
+      // Set expiresAt = now + 15 minutes
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
 
       const booking = await tx.booking.create({
         data: {
+          bookingCode,
           userId,
           courtId: String(courtId),
           date: bookingDate,
@@ -189,16 +283,30 @@ export async function POST(req: Request) {
           endTime,
           status: "PENDING",
           totalPrice,
+          expiresAt,
         },
         include: {
-          court: { select: { id: true, name: true, location: true, pricePerHour: true, image: true } },
+          court: { select: { id: true, name: true, location: true, pricePerHour: true, images: true } },
         },
       });
+
+      if (booking && booking.court) {
+        booking.court.images = normalizeImages(booking.court.images) as any;
+      }
 
       return booking;
     });
 
     console.log(`API: Booking created: ${created.id}`);
+
+    // Create Notification
+    await createNotification({
+      userId,
+      title: "Booking Created!",
+      message: `Your reservation ${created.bookingCode} for ${created.court?.name} is awaiting payment.`,
+      type: "BOOKING",
+    });
+
     return NextResponse.json(created, { status: 201 });
   } catch (err: unknown) {
     console.error("API Error [POST /api/bookings]:", err);

@@ -1,3 +1,7 @@
+<<<<<<< HEAD
+=======
+node_modules
+>>>>>>> backend-logicServer
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
@@ -37,3 +41,9 @@ yarn-error.log*
 next-env.d.ts
 
 /src/generated/prisma
+<<<<<<< HEAD
+=======
+
+# whatsapp bot
+/padelgo-whatsapp-bot/
+>>>>>>> backend-logicServer
