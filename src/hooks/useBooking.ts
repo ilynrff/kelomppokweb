@@ -5,7 +5,7 @@ import { getErrorMessage } from "@/lib/errorMessage";
 import { fetchJson } from "@/lib/fetchJson";
 
 type AvailabilitySlot = { time: string; available: boolean };
-type Court = { id: string; name: string; location: string; pricePerHour: number; image?: string | null };
+type Court = { id: string; name: string; location: string; pricePerHour: number; image?: string | null; description?: string | null };
 
 export function useBooking() {
   const router = useRouter();
@@ -86,6 +86,8 @@ export function useBooking() {
   };
 
   const checkout = async () => {
+    if (isLoading) return;
+    
     if (status !== "authenticated" || !session?.user) {
       setError("Anda harus login untuk melakukan booking.");
       setIsToastOpen(true);
@@ -125,10 +127,8 @@ export function useBooking() {
         return;
       }
 
-      setSuccessMsg("Booking berhasil dibuat.");
-      setIsToastOpen(true);
       setIsLoading(false);
-
+      // Hanya gunakan redirect ke halaman sukses
       router.push(`/booking/success?bookingId=${result.id}`);
     } catch (e: unknown) {
       setIsLoading(false);
