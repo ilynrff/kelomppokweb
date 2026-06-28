@@ -60,3 +60,27 @@ export function rangesOverlap(a: { start: number; end: number }, b: { start: num
   return a.start < b.end && a.end > b.start;
 }
 
+export function getVirtualStatus(booking: { status: string; date: Date | string; startTime: number; endTime: number }) {
+  const s = String(booking.status).toUpperCase();
+  // Only apply virtual override for active/confirmed bookings
+  if (!["CONFIRMED", "CHECKED_IN", "RESCHEDULE_APPROVED"].includes(s)) {
+    return s;
+  }
+
+  const now = new Date();
+  // Local Semarang Time (UTC+7)
+  const localNow = new Date(now.getTime() + 7 * 60 * 60 * 1000);
+  const localTodayStr = localNow.toISOString().split("T")[0];
+  const bookingDateStr = new Date(booking.date).toISOString().split("T")[0];
+  const nowMinutes = localNow.getUTCHours() * 60 + localNow.getUTCMinutes();
+
+  if (bookingDateStr < localTodayStr) return "COMPLETED";
+  if (bookingDateStr > localTodayStr) return s;
+
+  // Same day
+  if (nowMinutes > booking.endTime) return "COMPLETED";
+  if (nowMinutes >= booking.startTime) return "ONGOING";
+
+  return s;
+}
+
