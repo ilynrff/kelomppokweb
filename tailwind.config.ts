@@ -34,6 +34,20 @@ const config: Config = {
           DEFAULT: "hsl(var(--destructive))",
           foreground: "hsl(var(--destructive-foreground))",
         },
+        neon: {
+          DEFAULT: "#D7FF3F",
+          hover: "#C4E638",
+        },
+        dark: {
+          bg: "#0B0B0B",
+          surface: "#111111",
+          card: "#181818",
+          border: "#202020",
+        }
+      },
+      fontFamily: {
+        sans: ["var(--font-inter)", "system-ui", "sans-serif"],
+        display: ["var(--font-syne)", "var(--font-inter)", "system-ui", "sans-serif"],
       },
     },
   },
