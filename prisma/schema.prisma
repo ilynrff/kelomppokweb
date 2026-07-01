@@ -10,6 +10,7 @@ enum BookingStatus {
   PENDING
   PERLU_VERIFIKASI
   CONFIRMED
+  CHECKED_IN
   CANCELLED
   EXPIRED
   COMPLETED
@@ -24,31 +25,102 @@ enum PaymentStatus {
   REJECTED
 }
 
+enum MembershipStatus {
+  FREE
+  PENDING
+  ACTIVE
+  EXPIRED
+}
+
+enum MembershipType {
+  BASIC
+  MEMBER
+}
+
 model User {
-  id        String    @id @default(uuid())
-  name      String
-  email     String    @unique
-  password  String
-  role      String    @default("USER")
-  bookings  Booking[]
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id         String         @id @default(uuid())
+  name       String
+  whatsapp   String         @unique
+  password   String
+  role                String           @default("USER")
+  membership          MembershipType   @default(BASIC)
+  membershipStatus    MembershipStatus @default(FREE)
+  membershipExpiresAt DateTime?
+  membershipRequests  MembershipRequest[]
+  bookings            Booking[]
+  notifications       Notification[]
+  hostedMatches       OpenMatch[]    @relation("HostedMatches")
+  joinedMatches       MatchPlayer[]
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  message   String
+  type      String   // e.g., 'BOOKING', 'PAYMENT', 'MEMBERSHIP'
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([userId, isRead])
+  @@index([createdAt])
+}
+
+model MembershipRequest {
+  id         String        @id @default(uuid())
+  userId     String
+  user       User          @relation(fields: [userId], references: [id])
+  proofImage String?
+  status     PaymentStatus @default(PENDING)
+  amount     Int
+  midtransOrderId String?   @unique
+  midtransTransactionId String?
+  paymentMethod String?
+  paymentApprovedAt DateTime?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Venue {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  location    String
+  description String?
+  thumbnail   String?
+  courts      Court[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model Court {
   id           String    @id @default(uuid())
+  venueId      String
   name         String
+  type         String?
   location     String
   pricePerHour Int
-  image        String?
+  images       Json      @default("[]")
   description  String?
+  isActive     Boolean   @default(true)
   bookings     Booking[]
+  venue        Venue     @relation(fields: [venueId], references: [id])
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 }
 
 model Booking {
   id              String        @id @default(uuid())
+  bookingCode     String?       @unique
   userId          String
   courtId         String
   date            DateTime
@@ -58,6 +130,14 @@ model Booking {
   totalPrice      Int
   paymentProofUrl String?
   expiresAt       DateTime      // Payment deadline = createdAt + 15 min
+  paymentApprovedAt DateTime?
+  
+  midtransOrderId String?       @unique
+  midtransTransactionId String?
+  paymentMethod   String?
+
+  equipmentPackage String?      @default("NONE") // NONE, STARTER, GROUP
+  equipmentPrice   Int          @default(0)
 
   // Reschedule request fields
   rescheduleDate      DateTime? // Requested new date
@@ -68,6 +148,7 @@ model Booking {
   user    User    @relation(fields: [userId], references: [id])
   court   Court   @relation(fields: [courtId], references: [id])
   payment Payment?
+  openMatch OpenMatch?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -75,6 +156,7 @@ model Booking {
   @@index([courtId, date])
   @@index([userId])
   @@index([status, expiresAt])
+  @@index([createdAt])
 }
 
 model Payment {
@@ -88,3 +170,63 @@ model Payment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+enum MatchStatus {
+  OPEN
+  FULL
+  ONGOING
+  COMPLETED
+  CANCELED
+}
+
+model OpenMatch {
+  id             String      @id @default(uuid())
+  bookingId      String      @unique
+  hostId         String
+  title          String
+  matchType      String      // Fun Match, Competitive, Training, Friendly
+  skillLevel     String      // Beginner, Intermediate, Advanced
+  maxPlayers     Int         // e.g. 4
+  pricePerPlayer Int?        // Optional manually entered price per player
+  description    String?     // Optional match description
+  visibility     String      @default("PUBLIC") // PUBLIC, MEMBERS_ONLY
+  status         MatchStatus @default(OPEN)
+
+  booking        Booking     @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  host           User        @relation("HostedMatches", fields: [hostId], references: [id])
+  players        MatchPlayer[]
+
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@index([hostId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model MatchPlayer {
+  id        String    @id @default(uuid())
+  matchId   String
+  playerId  String
+
+  match     OpenMatch @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  player    User      @relation(fields: [playerId], references: [id])
+
+  createdAt DateTime  @default(now())
+
+  @@unique([matchId, playerId])
+  @@index([playerId])
+  @@index([matchId])
+}
+
+model PaymentLog {
+  id                String   @id @default(uuid())
+  bookingId         String?
+  orderId           String
+  transactionId     String?
+  paymentMethod     String?
+  transactionStatus String
+  payload           String?
+  createdAt         DateTime @default(now())
+}
+
