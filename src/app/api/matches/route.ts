@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { getErrorMessage } from "@/lib/errorMessage";
+import { getOpenMatchLifecycleState } from "@/lib/bookingTime";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -124,8 +125,29 @@ export async function GET(req: Request) {
         hostId: joinedBy,
       };
     } else {
-      // Standard public feed - only show OPEN or FULL matches
-      whereClause.visibility = "PUBLIC";
+      // Standard public feed - show MEMBERS_ONLY to active members, otherwise only PUBLIC
+      const session = await getServerSession(authOptions);
+      let isMember = false;
+      if (session?.user?.id) {
+        try {
+          const dbUser = await prisma.user.findUnique({
+            where: { id: session.user.id },
+            select: { membershipStatus: true }
+          });
+          isMember = dbUser?.membershipStatus === "ACTIVE";
+        } catch (dbError) {
+          console.error("DEBUG: Failed to query user membership status in matches feed:", dbError);
+        }
+      }
+
+      if (isMember) {
+        whereClause.visibility = {
+          in: ["PUBLIC", "MEMBERS_ONLY"],
+        };
+      } else {
+        whereClause.visibility = "PUBLIC";
+      }
+
       whereClause.status = {
         in: ["OPEN", "FULL"],
       };
@@ -159,6 +181,7 @@ export async function GET(req: Request) {
                 id: true,
                 name: true,
                 location: true,
+                venue: { select: { name: true } }
               },
             },
           },
@@ -169,7 +192,26 @@ export async function GET(req: Request) {
       },
     });
 
-    return NextResponse.json(matches);
+    // Auto-expiration logic: hide EXPIRED matches from the public feed
+    const activeMatches = matches.filter(m => {
+      if (m.status === "CANCELED") return false;
+      
+      const state = getOpenMatchLifecycleState({
+        date: m.booking.date,
+        startTime: m.booking.startTime,
+        endTime: m.booking.endTime,
+      });
+
+      if (userId || joinedBy) {
+        // Personal dashboard views can render history
+        return true;
+      }
+
+      // Public Open Match feed must strictly exclude EXPIRED sessions
+      return state !== "EXPIRED";
+    });
+
+    return NextResponse.json(activeMatches);
   } catch (error: unknown) {
     return NextResponse.json(
       { error: "Internal Server Error", details: getErrorMessage(error) },

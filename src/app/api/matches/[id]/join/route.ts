@@ -37,6 +37,20 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       return NextResponse.json({ error: "This match is no longer open for joining" }, { status: 400 });
     }
 
+    // Enforce Members Only join gating check
+    if (match.visibility === "MEMBERS_ONLY") {
+      const dbUser = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { membershipStatus: true }
+      });
+      if (!dbUser || dbUser.membershipStatus !== "ACTIVE") {
+        return NextResponse.json(
+          { error: "This match is restricted to active Members only" },
+          { status: 403 }
+        );
+      }
+    }
+
     // Check if user is already in the match (either as host or joined player)
     const isAlreadyPlayer = match.players.some((p) => p.playerId === session.user.id);
     if (isAlreadyPlayer) {
