@@ -50,9 +50,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session || session.user.role !== "ADMIN") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const body = (await req.json()) as Record<string, unknown>;
     const status = body.status;
@@ -64,6 +62,28 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     if (!VALID_STATUSES.includes(normalized)) {
       return NextResponse.json({ error: `Invalid status. Must be one of: ${VALID_STATUSES.join(", ")}` }, { status: 400 });
     }
+
+    // Check permissions
+    const bookingCheck = await prisma.booking.findUnique({
+      where: { id: params.id },
+    });
+    if (!bookingCheck) return NextResponse.json({ error: "Booking not found" }, { status: 404 });
+
+    const isAdmin = session.user.role === "ADMIN";
+    const isOwner = bookingCheck.userId === session.user.id;
+
+    if (!isAdmin) {
+      if (!isOwner) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+      if (normalized !== "CANCELLED") {
+        return NextResponse.json({ error: "Tidak diizinkan mengubah status selain CANCELLED" }, { status: 403 });
+      }
+      if (bookingCheck.status !== "PENDING") {
+        return NextResponse.json({ error: "Hanya booking PENDING yang dapat dibatalkan" }, { status: 400 });
+      }
+    }
+
 
     const updatedBooking = await prisma.$transaction(async (tx) => {
       const booking = await tx.booking.findUnique({
@@ -111,11 +131,14 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         }
       }
 
+      const isApprovedNow = normalized === "CONFIRMED" && !booking.paymentApprovedAt;
+
       const result = await tx.booking.update({
         where: { id: params.id },
         data: {
           status: normalized as any,
           ...(refundAmount !== undefined ? { refundAmount } : {}),
+          ...(isApprovedNow ? { paymentApprovedAt: new Date() } : {}),
         },
         include: {
           user: { select: { id: true, name: true, whatsapp: true } },

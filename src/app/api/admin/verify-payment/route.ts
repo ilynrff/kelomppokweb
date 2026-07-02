@@ -89,6 +89,8 @@ export async function POST(req: Request) {
     }
 
     // Update both payment and booking in transaction
+    const shouldSetApprovedTime = action === "APPROVE" && !booking.paymentApprovedAt;
+
     const result = await prisma.$transaction(async (tx) => {
       const updatedPayment = await tx.payment.update({
         where: { id: booking.payment!.id },
@@ -97,7 +99,10 @@ export async function POST(req: Request) {
 
       const updatedBooking = await tx.booking.update({
         where: { id: bookingId },
-        data: { status: newBookingStatus },
+        data: { 
+          status: newBookingStatus,
+          ...(shouldSetApprovedTime ? { paymentApprovedAt: new Date() } : {}),
+        },
         include: {
           user: { select: { id: true, name: true, whatsapp: true } },
           court: { select: { id: true, name: true } },
