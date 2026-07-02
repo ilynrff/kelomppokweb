@@ -4,16 +4,43 @@ import { useSession } from "next-auth/react";
 import { getErrorMessage } from "@/lib/errorMessage";
 import { fetchJson } from "@/lib/fetchJson";
 
-type AvailabilitySlot = { time: string; available: boolean };
-type Court = { id: string; name: string; location: string; pricePerHour: number; image?: string | null; description?: string | null };
+type AvailabilitySlot = { time: string; available: boolean; status: string };
+type Court = { id: string; venueId: string; name: string; location: string; pricePerHour: number; image?: string | null; description?: string | null };
+type Venue = { id: string; name: string; location: string; description?: string | null; thumbnail?: string | null; courts: Court[] };
+
+const loadSnapScript = (clientKey: string, isProduction: boolean): Promise<boolean> => {
+  return new Promise((resolve) => {
+    if (typeof window === "undefined") {
+      resolve(false);
+      return;
+    }
+    if ((window as any).snap) {
+      resolve(true);
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = isProduction
+      ? "https://app.midtrans.com/snap/snap.js"
+      : "https://app.sandbox.midtrans.com/snap/snap.js";
+    script.setAttribute("data-client-key", clientKey);
+    script.onload = () => resolve(true);
+    script.onerror = () => {
+      console.error("Failed to load Midtrans Snap script");
+      resolve(false);
+    };
+    document.body.appendChild(script);
+  });
+};
 
 export function useBooking() {
   const router = useRouter();
   const { data: session, status } = useSession();
 
+  const [venues, setVenues] = useState<Venue[]>([]);
   const [courts, setCourts] = useState<Court[]>([]);
   const [timeSlots, setTimeSlots] = useState<AvailabilitySlot[]>([]);
 
+  const [selectedVenue, setSelectedVenue] = useState<string | null>(null);
   const [selectedCourt, setSelectedCourt] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedSlots, setSelectedSlots] = useState<string[]>([]);
@@ -34,19 +61,28 @@ export function useBooking() {
   }, []);
 
   useEffect(() => {
-    fetchJson<Court[]>("/api/courts")
+    fetchJson<Venue[]>("/api/venues")
       .then((data) => {
         if (!Array.isArray(data)) throw new Error("Invalid response");
-        setCourts(data);
+        setVenues(data);
+        
+        // Flatten all courts from all venues
+        const allCourts = data.flatMap(v => v.courts);
+        setCourts(allCourts);
 
         const params = new URLSearchParams(window.location.search);
         const urlCourtId = params.get("courtId");
-        if (urlCourtId && data.some((c: Court) => c.id === urlCourtId)) {
-          setSelectedCourt(urlCourtId);
+        if (urlCourtId) {
+          const targetCourt = allCourts.find((c: Court) => c.id === urlCourtId);
+          if (targetCourt) {
+            setSelectedVenue(targetCourt.venueId);
+            setSelectedCourt(urlCourtId);
+          }
         }
       })
       .catch((err: unknown) => {
-        console.error("Error fetching courts:", err);
+        console.error("Error fetching venues/courts:", err);
+        setVenues([]);
         setCourts([]);
         setError(getErrorMessage(err) || "Gagal memuat data lapangan");
         setIsToastOpen(true);
@@ -85,7 +121,7 @@ export function useBooking() {
     );
   };
 
-  const checkout = async () => {
+  const checkout = async (equipmentPackage = "NONE", equipmentPrice = 0) => {
     if (isLoading) return;
     
     if (status !== "authenticated" || !session?.user) {
@@ -115,6 +151,8 @@ export function useBooking() {
           courtId: selectedCourt,
           date: isoDate,
           timeSlots: selectedSlots,
+          equipmentPackage,
+          equipmentPrice,
         }),
       });
 
@@ -128,8 +166,7 @@ export function useBooking() {
       }
 
       setIsLoading(false);
-      // Hanya gunakan redirect ke halaman sukses
-      router.push(`/booking/success?bookingId=${result.id}`);
+      router.push(`/booking/summary/${result.id}`);
     } catch (e: unknown) {
       setIsLoading(false);
       setError(getErrorMessage(e) || "Terjadi kesalahan koneksi server.");
@@ -138,6 +175,9 @@ export function useBooking() {
   };
 
   return {
+    venues,
+    selectedVenue,
+    setSelectedVenue,
     courts,
     timeSlots,
     isLoadingSlots,
