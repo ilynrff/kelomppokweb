@@ -96,7 +96,7 @@ export async function GET(req: Request) {
       where: whereClause,
       include: {
         user: { select: { id: true, name: true, whatsapp: true, membership: true, membershipStatus: true } },
-        court: { select: { id: true, name: true, location: true, pricePerHour: true, images: true } },
+        court: { select: { id: true, name: true, location: true, pricePerHour: true, images: true, venue: { select: { id: true, name: true } } } },
         payment: { select: { id: true, status: true, proofImage: true, createdAt: true } },
         openMatch: { select: { id: true, status: true } },
       },
@@ -105,14 +105,14 @@ export async function GET(req: Request) {
 
     const bookings = rawBookings.map(b => ({
       ...b,
-      status: getVirtualStatus(b),
+      status: getVirtualStatus(b as any),
       court: b.court ? {
         ...b.court,
         images: normalizeImages(b.court.images)
       } : null
     }));
 
-    return NextResponse.json(bookings, { status: 200 });
+    return NextResponse.json(bookings as any, { status: 200 });
   } catch (err: unknown) {
     console.error("API Error [GET /api/bookings]:", err);
     return NextResponse.json({ error: "Internal Server Error", details: getErrorMessage(err) }, { status: 500 });
@@ -139,7 +139,7 @@ export async function POST(req: Request) {
     // Verify user still exists in DB (to prevent P2003 if DB was reset)
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, membership: true },
+      select: { id: true, name: true, whatsapp: true, membership: true, membershipStatus: true },
     });
 
     if (!user) {
@@ -154,6 +154,8 @@ export async function POST(req: Request) {
     const payload = (body ?? {}) as Record<string, unknown>;
     const courtId = payload.courtId;
     const date = payload.date;
+    const equipmentPackage = (payload.equipmentPackage as string) || "NONE";
+    const equipmentPrice = Number(payload.equipmentPrice) || 0;
 
     if (!courtId || !date) {
       return NextResponse.json({ error: "Missing required booking details." }, { status: 400 });
@@ -207,7 +209,8 @@ export async function POST(req: Request) {
     const diffTime = target.getTime() - today.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     
-    const maxDays = user.membership === "MEMBER" ? 14 : 7;
+    const isMember = user.membership === "MEMBER" && user.membershipStatus === "ACTIVE";
+    const maxDays = isMember ? 14 : 7;
     if (diffDays > maxDays) {
       return NextResponse.json({ 
         error: `Upgrade ke MEMBER untuk bisa booking lebih awal (H-${maxDays} vs H-14).` 
@@ -252,9 +255,12 @@ export async function POST(req: Request) {
       let totalPrice = court.pricePerHour * durationHours;
 
       // Apply Membership Discount (10% for MEMBER)
-      if (user.membership === "MEMBER") {
+      if (isMember) {
         totalPrice = Math.round(totalPrice * 0.9);
       }
+
+      // Add Equipment Package Premium Price
+      totalPrice += equipmentPrice;
 
       // Generate bookingCode: PDL-YYYY-NNNN
       const year = new Date().getFullYear();
@@ -284,6 +290,9 @@ export async function POST(req: Request) {
           status: "PENDING",
           totalPrice,
           expiresAt,
+          equipmentPackage,
+          equipmentPrice,
+          midtransOrderId: `BOOKING-${bookingCode}`,
         },
         include: {
           court: { select: { id: true, name: true, location: true, pricePerHour: true, images: true } },
@@ -299,6 +308,32 @@ export async function POST(req: Request) {
 
     console.log(`API: Booking created: ${created.id}`);
 
+    // Generate Midtrans Snap token
+    let snapToken = "";
+    let snapRedirectUrl = "";
+    let clientKey = "";
+    let isProduction = false;
+
+    try {
+      const { createSnapTransaction } = await import("@/lib/midtrans");
+      const midtransResult = await createSnapTransaction(
+        `BOOKING-${created.bookingCode}`,
+        created.totalPrice,
+        {
+          name: user?.name || "Player",
+          phone: user?.whatsapp || "",
+        }
+      );
+      snapToken = midtransResult.token;
+      snapRedirectUrl = midtransResult.redirectUrl;
+      clientKey = midtransResult.clientKey;
+      isProduction = midtransResult.isProduction;
+
+
+    } catch (midtransError) {
+      console.error("[Midtrans] Failed to generate Snap Token on creation:", midtransError);
+    }
+
     // Create Notification
     await createNotification({
       userId,
@@ -307,7 +342,16 @@ export async function POST(req: Request) {
       type: "BOOKING",
     });
 
-    return NextResponse.json(created, { status: 201 });
+    return NextResponse.json(
+      {
+        ...created,
+        midtransToken: snapToken || null,
+        midtransRedirectUrl: snapRedirectUrl || null,
+        midtransClientKey: clientKey || null,
+        midtransIsProduction: isProduction,
+      },
+      { status: 201 }
+    );
   } catch (err: unknown) {
     console.error("API Error [POST /api/bookings]:", err);
     const message = getErrorMessage(err);
