@@ -24,24 +24,22 @@ export default function RegisterPage() {
     const hasMinLength = password.length >= 8;
     const hasLetter = /[a-zA-Z]/.test(password);
     const hasNumber = /[0-9]/.test(password);
-
+    
     return {
       hasMinLength,
       hasLetter,
       hasNumber,
-      isValid: hasMinLength && hasLetter && hasNumber,
+      isValid: hasMinLength && hasLetter && hasNumber
     };
   }, [password]);
 
-  const isFormValid =
-    name && whatsapp && passwordStatus?.isValid && password === confirmPassword;
+  const isFormValid = name && whatsapp && passwordStatus?.isValid && password === confirmPassword;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
+    
     if (!isFormValid) {
-      if (password !== confirmPassword)
-        setError("Password konfirmasi tidak cocok.");
+      if (password !== confirmPassword) setError("Password konfirmasi tidak cocok.");
       else setError("Lengkapi form dengan data yang valid.");
       return;
     }
@@ -75,14 +73,12 @@ export default function RegisterPage() {
       {/* Background Ambient Glow */}
       <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-neon/5 blur-[120px] rounded-full pointer-events-none"></div>
       <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-neon/5 blur-[150px] rounded-full pointer-events-none"></div>
-
+      
       <div className="w-full max-w-lg z-10 animate-fade-in py-12">
         {/* Minimal Header */}
         <div className="text-center mb-10">
-          <Link
-            href="/"
-            className={`${logirent.className} inline-flex items-center gap-1 mb-8 hover:opacity-80 transition-opacity`}
-          ></Link>
+          <Link href="/" className={`${logirent.className} inline-flex items-center gap-1 mb-8 hover:opacity-80 transition-opacity`}>
+          </Link>
           <h1 className="text-2xl font-black text-white tracking-tight mb-2 uppercase italic">
             Join the <span className="text-neon">League</span>
           </h1>
@@ -143,30 +139,16 @@ export default function RegisterPage() {
             {/* Subtle Password Rules */}
             {password && (
               <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/[0.03]">
-                <Rule
-                  label="8+ Characters"
-                  active={passwordStatus?.hasMinLength}
-                />
-                <Rule
-                  label="Includes Letters"
-                  active={passwordStatus?.hasLetter}
-                />
-                <Rule
-                  label="Includes Numbers"
-                  active={passwordStatus?.hasNumber}
-                />
-                <Rule
-                  label="Passwords Match"
-                  active={password === confirmPassword && !!password}
-                />
+                <Rule label="8+ Characters" active={passwordStatus?.hasMinLength} />
+                <Rule label="Includes Letters" active={passwordStatus?.hasLetter} />
+                <Rule label="Includes Numbers" active={passwordStatus?.hasNumber} />
+                <Rule label="Passwords Match" active={password === confirmPassword && !!password} />
               </div>
             )}
 
             {error && (
               <div className="p-4 bg-red-500/5 border border-red-500/10 rounded-2xl animate-shake">
-                <p className="text-[10px] font-black uppercase tracking-widest text-red-500">
-                  {error}
-                </p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-red-500">{error}</p>
               </div>
             )}
 
@@ -198,14 +180,10 @@ export default function RegisterPage() {
   );
 }
 
-function Rule({ label, active }: { label: string; active?: boolean }) {
+function Rule({ label, active }: { label: string, active?: boolean }) {
   return (
-    <div
-      className={`flex items-center gap-2 transition-all duration-500 ${active ? "opacity-100" : "opacity-20"}`}
-    >
-      <div
-        className={`w-1 h-1 rounded-full ${active ? "bg-neon shadow-[0_0_8px_#D7FF3F]" : "bg-white"}`}
-      ></div>
+    <div className={`flex items-center gap-2 transition-all duration-500 ${active ? 'opacity-100' : 'opacity-20'}`}>
+      <div className={`w-1 h-1 rounded-full ${active ? 'bg-neon shadow-[0_0_8px_#D7FF3F]' : 'bg-white'}`}></div>
       <span className="text-[9px] font-bold uppercase tracking-wider text-white">
         {label}
       </span>

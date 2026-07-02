@@ -87,7 +87,7 @@ const FEATURES = [
   },
 ];
 
-function FacilityCarousel({ courts, loading }: { courts: any[]; loading: boolean }) {
+function FacilityCarousel({ venues, loading }: { venues: any[]; loading: boolean }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [modalImg, setModalImg] = useState<string | null>(null);
   const [isVisible, setIsVisible] = useState(false);
@@ -132,12 +132,12 @@ function FacilityCarousel({ courts, loading }: { courts: any[]; loading: boolean
     ];
     const categories = ["PREMIUM COURT", "INDOOR ARENA", "SIGNATURE COURT"];
 
-    if (!loading && courts && courts.length > 0) {
-      return courts.map((c, i) => {
-        const imageUrl = c.images?.[0]?.url || (typeof c.images?.[0] === "string" ? c.images[0] : null) || c.image;
-        const raw = c.description || "";
-        const desc = raw.length > 55 ? raw.substring(0, 55).trim() + "…" : raw || (c.location === "Indoor" ? "Designed for competitive modern play" : "Professional-grade open-air experience");
-        return { id: c.id, category: categories[i % categories.length], title: c.name, desc, img: imageUrl || fallbacks[i % fallbacks.length] };
+    if (!loading && venues && venues.length > 0) {
+      return venues.map((v, i) => {
+        const imageUrl = v.thumbnail || fallbacks[i % fallbacks.length];
+        const raw = v.description || "";
+        const desc = raw.length > 55 ? raw.substring(0, 55).trim() + "…" : raw || (v.location === "Indoor" ? "Designed for competitive modern play" : "Professional-grade open-air experience");
+        return { id: v.id, category: categories[i % categories.length], title: v.name, desc, img: imageUrl };
       });
     }
     return [
@@ -145,7 +145,7 @@ function FacilityCarousel({ courts, loading }: { courts: any[]; loading: boolean
       { id: "f2", category: "INDOOR ARENA", title: "Match Arena", desc: "Professional-grade indoor atmosphere", img: fallbacks[1] },
       { id: "f3", category: "SIGNATURE COURT", title: "Open-Air Experience", desc: "Breathtaking outdoor social environment", img: fallbacks[2] },
     ];
-  }, [courts, loading]);
+  }, [venues, loading]);
   const handleNext = () => setActiveIndex((p) => p + 1);
   const handlePrev = () => setActiveIndex((p) => p - 1);
   const offsets = [-1, 0, 1, 2];
@@ -295,7 +295,7 @@ function FacilityCarousel({ courts, loading }: { courts: any[]; loading: boolean
   );
 }
 
-function FacilitiesSection({ courts, loading }: { courts: any[]; loading: boolean }) {
+function FacilitiesSection({ venues, loading }: { venues: any[]; loading: boolean }) {
   const [isVisible, setIsVisible] = useState(false);
   const sectionRef = useRef<HTMLDivElement>(null);
 
@@ -395,7 +395,7 @@ function FacilitiesSection({ courts, loading }: { courts: any[]; loading: boolea
 
         {/* RIGHT SIDE: Horizontal Showcase */}
         <div className="w-full xl:flex-1 relative flex flex-col md:block">
-          <FacilityCarousel courts={courts} loading={loading} />
+          <FacilityCarousel venues={venues} loading={loading} />
           
           {/* ── NAVIGATION CONTROLS (RESPONSIVE POSITIONING) ── */}
           <div
@@ -427,15 +427,13 @@ function FacilitiesSection({ courts, loading }: { courts: any[]; loading: boolea
 
 export default function Home() {
   const { data: session } = useSession();
-  const [courts, setCourts] = useState<
+  const [venues, setVenues] = useState<
     {
       id: string;
       name: string;
       location: string;
-      pricePerHour: number;
-      images?: any[] | null;
-      image?: string | null;
       description?: string | null;
+      thumbnail?: string | null;
     }[]
   >([]);
   const [loading, setLoading] = useState(true);
@@ -447,21 +445,19 @@ export default function Home() {
         id: string;
         name: string;
         location: string;
-        pricePerHour: number;
-        images?: any[] | null;
-        image?: string | null;
         description?: string | null;
+        thumbnail?: string | null;
       }[]
-    >("/api/courts")
+    >("/api/venues")
       .then((data) => {
         if (!Array.isArray(data)) throw new Error("Invalid response");
-        setCourts(data);
+        setVenues(data);
       })
       .catch((err) => {
-        console.error("Error fetching courts Home:", err);
-        setCourts([]);
+        console.error("Error fetching venues Home:", err);
+        setVenues([]);
         setError(
-          "Gagal memuat data lapangan. Pastikan backend & database sudah siap.",
+          "Gagal memuat data venue. Pastikan backend & database sudah siap.",
         );
       })
       .finally(() => setLoading(false));
@@ -597,7 +593,7 @@ export default function Home() {
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-neon"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
                 </div>
                 <div>
-                  <div className="font-sans font-bold text-black text-xl tracking-tight leading-none mb-1">3 Courts</div>
+                  <div className="font-sans font-bold text-black text-xl tracking-tight leading-none mb-1">{venues.length || 3} Venues</div>
                   <div id="premium-facilities" className="font-sans text-black/70 text-sm font-medium">Premium Quality</div>
                 </div>
               </div>
@@ -616,7 +612,7 @@ export default function Home() {
       {/* ===================== */}
       {/* FACILITIES SHOWCASE (Refactored) */}
       {/* ===================== */}
-      <FacilitiesSection courts={courts} loading={loading} />
+      <FacilitiesSection venues={venues} loading={loading} />
 
       {/* ===================== */}
       {/* SECTION 5 — CLUB AMENITIES (Redesigned) */}
