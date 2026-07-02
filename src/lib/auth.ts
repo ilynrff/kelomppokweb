@@ -25,10 +25,10 @@ export const authOptions: NextAuthOptions = {
         if (!credentials?.whatsapp || !credentials?.password) {
           throw new Error("Nomor WhatsApp dan password wajib diisi");
         }
-        
+
         const normalizedWA = normalizeWhatsApp(credentials.whatsapp);
         console.log("DEBUG: Login attempt for:", normalizedWA);
-        
+
         let user = null;
         try {
           user = await prisma.user.findFirst({
@@ -86,11 +86,29 @@ export const authOptions: NextAuthOptions = {
       }
 
       // Handle session update trigger
-      if (trigger === "update" && session) {
-        if (session.name) token.name = session.name;
-        if (session.membership) token.membership = session.membership;
-        if (session.membershipStatus) token.membershipStatus = session.membershipStatus;
-        if (session.membershipExpiresAt) token.membershipExpiresAt = session.membershipExpiresAt;
+      if (trigger === "update") {
+        try {
+          const dbUser = await prisma.user.findUnique({
+            where: { id: token.id as string },
+            select: { name: true, membership: true, membershipStatus: true, membershipExpiresAt: true }
+          });
+          if (dbUser) {
+            token.name = dbUser.name;
+            token.membership = dbUser.membership;
+            token.membershipStatus = dbUser.membershipStatus;
+            token.membershipExpiresAt = dbUser.membershipExpiresAt;
+          }
+        } catch (dbError) {
+          console.error("DEBUG: Failed to fetch fresh user data for session update:", dbError);
+        }
+
+        // Support fallback manual session update overrides if passed
+        if (session) {
+          if (session.name) token.name = session.name;
+          if (session.membership) token.membership = session.membership;
+          if (session.membershipStatus) token.membershipStatus = session.membershipStatus;
+          if (session.membershipExpiresAt) token.membershipExpiresAt = session.membershipExpiresAt;
+        }
       }
 
       return token;

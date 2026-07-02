@@ -1,5 +1,5 @@
-export const DEFAULT_OPEN_MINUTES = 8 * 60; // 08:00
-export const DEFAULT_CLOSE_MINUTES = 20 * 60; // 20:00
+export const DEFAULT_OPEN_MINUTES = 9 * 60; // 09:00
+export const DEFAULT_CLOSE_MINUTES = 23 * 60; // 23:00
 export const DEFAULT_SLOT_MINUTES = 60;
 
 export function formatMinutesToHHmm(totalMinutes: number) {
@@ -84,3 +84,26 @@ export function getVirtualStatus(booking: { status: string; date: Date | string;
   return s;
 }
 
+export function getSessionLifecycleState(booking: { date: Date | string; startTime: number; endTime: number }): "UPCOMING" | "LIVE" | "FINISHED" {
+  const now = new Date();
+  // Local Jakarta/Semarang Time (UTC+7)
+  const localNow = new Date(now.getTime() + 7 * 60 * 60 * 1000);
+  const localTodayStr = localNow.toISOString().split("T")[0];
+  const bookingDateStr = new Date(booking.date).toISOString().split("T")[0];
+  const nowMinutes = localNow.getUTCHours() * 60 + localNow.getUTCMinutes();
+
+  if (bookingDateStr < localTodayStr) return "FINISHED";
+  if (bookingDateStr > localTodayStr) return "UPCOMING";
+
+  // Same day
+  if (nowMinutes > booking.endTime) return "FINISHED";
+  if (nowMinutes >= booking.startTime) return "LIVE";
+
+  return "UPCOMING";
+}
+
+export function getOpenMatchLifecycleState(match: { date: Date | string; startTime: number; endTime: number }): "UPCOMING" | "LIVE" | "EXPIRED" {
+  const state = getSessionLifecycleState(match);
+  if (state === "FINISHED") return "EXPIRED";
+  return state;
+}

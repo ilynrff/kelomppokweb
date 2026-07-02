@@ -1,7 +1,10 @@
-// Last updated: 2026-05-16T15:01:00
+// Last updated: 2026-05-30T15:10:00 (Forcing Prisma Client recreation)
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import pg from 'pg';
+
+// Clear cached global instance to force loading of newly generated schema metadata
+delete (global as any).prisma;
 
 const globalForPrisma = global as unknown as { prisma: PrismaClient };
 
