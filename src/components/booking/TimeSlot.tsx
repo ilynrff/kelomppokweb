@@ -3,17 +3,40 @@ import React from 'react';
 interface TimeSlotProps {
   time: string;
   isAvailable: boolean;
+  status?: string;
   isSelected: boolean;
   price: number;
   onSelect: () => void;
 }
 
-export function TimeSlot({ time, isAvailable, isSelected, price, onSelect }: TimeSlotProps) {
+export function TimeSlot({ time, isAvailable, status, isSelected, price, onSelect }: TimeSlotProps) {
   if (!isAvailable) {
+    let bgClass = "bg-[#111]";
+    let textClass = "text-white/30";
+    let borderClass = "border-white/5";
+    let label = "Full";
+
+    if (status === "OPEN_MATCH") {
+      bgClass = "bg-orange-500/10";
+      textClass = "text-orange-400";
+      borderClass = "border-orange-500/20";
+      label = "Open Match";
+    } else if (status === "LIVE_MATCH") {
+      bgClass = "bg-blue-500/10 animate-pulse";
+      textClass = "text-blue-400";
+      borderClass = "border-blue-500/20";
+      label = "Live Match";
+    } else if (status === "BOOKED") {
+      bgClass = "bg-red-500/5";
+      textClass = "text-red-400/50";
+      borderClass = "border-red-500/10";
+      label = "Booked";
+    }
+
     return (
-      <button disabled className="w-full relative px-2 py-4 bg-[#111] text-white/30 opacity-60 cursor-not-allowed border border-white/5 rounded-2xl font-bold flex flex-col items-center">
+      <button disabled className={`w-full relative px-2 py-4 ${bgClass} ${textClass} opacity-80 cursor-not-allowed border ${borderClass} rounded-2xl font-bold flex flex-col items-center`}>
          <span className="text-sm md:text-base">{time}</span>
-         <span className="text-xs font-semibold mt-1">Full</span>
+         <span className="text-xs font-semibold mt-1">{label}</span>
       </button>
     );
   }
