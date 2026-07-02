@@ -24,11 +24,19 @@ type Booking = {
   rescheduleEndTime?: number | null;
   rescheduleNote?: string | null;
   user?: { name?: string; whatsapp?: string };
-  court?: { name?: string; location?: string };
+  court?: { name?: string; location?: string; venue?: { name?: string } };
   payment?: { status?: string; proofImage?: string } | null;
+  equipmentPackage?: string;
+  equipmentPrice?: number;
 };
 
-type Props = { initialBookings?: Booking[]; isLoading?: boolean; defaultFilter?: string };
+type Props = { 
+  initialBookings?: Booking[]; 
+  isLoading?: boolean; 
+  defaultFilter?: string;
+  onUpdateBooking?: (updated: Booking) => void;
+  onRefreshBookings?: () => Promise<void>;
+};
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
   PENDING:               { label: "Menunggu Bayar",     bg: "bg-orange-500/10 border border-orange-500/20", text: "text-orange-400" },
@@ -67,34 +75,34 @@ function CourtAvailTag({ booking }: { booking: Booking }) {
   return null;
 }
 
-export function BookingManager({ initialBookings = [], isLoading = false, defaultFilter }: Props) {
+export function BookingManager({ 
+  initialBookings = [], 
+  isLoading = false, 
+  defaultFilter,
+  onUpdateBooking,
+  onRefreshBookings
+}: Props) {
   const router = useRouter();
-  const [bookings, setBookings] = useState<Booking[]>(initialBookings);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [filter, setFilter] = useState(defaultFilter ?? "all");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<"desc" | "asc">("desc");
   const [selected, setSelected] = useState<Booking | null>(null);
   
-  // New Filter & Search states
-  const [dateFilter, setDateFilter] = useState<string>("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [toastQueue, setToastQueue] = useState<{ msg: string; type: "success" | "error" }[]>([]);
 
-  useEffect(() => { setBookings(initialBookings); }, [initialBookings]);
+  const bookings = initialBookings;
 
-  // Effect to re-fetch when dateFilter changes
+  // Sync selected booking inside modal when initialBookings list changes dynamically
   useEffect(() => {
-    refresh();
-  }, [dateFilter]);
+    if (selected) {
+      const fresh = initialBookings.find(b => b.id === selected.id);
+      if (fresh) setSelected(fresh);
+    }
+  }, [initialBookings, selected]);
 
-  // Silent auto-refresh every 30 seconds
-  useEffect(() => {
-    const interval = setInterval(() => {
-      refresh(true);
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [dateFilter]);
+  // No independent polling interval here. Polling is managed centrally in AdminDashboard.tsx.
 
   const showToast = (msg: string, type: "success" | "error") => {
     setToastQueue((q) => [...q, { msg, type }]);
@@ -102,23 +110,16 @@ export function BookingManager({ initialBookings = [], isLoading = false, defaul
   };
 
   const refresh = async (isSilent = false) => {
-    if (!isSilent) setIsRefreshing(true);
-    try {
-      const url = dateFilter ? `/api/bookings?date=${dateFilter}` : "/api/bookings";
-      const data = await fetchJson<Booking[]>(url);
-      const newData = Array.isArray(data) ? data : [];
-      
-      setBookings(newData);
-
-      // Auto-update any open modals so they reflect latest status
-      if (isSilent) {
-        setSelected(prev => prev ? (newData.find(b => b.id === prev.id) || prev) : null);
+    if (onRefreshBookings) {
+      if (!isSilent) setIsRefreshing(true);
+      try {
+        await onRefreshBookings();
+      } catch (e) { 
+        if (!isSilent) showToast(getErrorMessage(e) || "Error", "error"); 
       }
-    } catch (e) { 
-      if (!isSilent) showToast(getErrorMessage(e) || "Error", "error"); 
-    }
-    finally { 
-      if (!isSilent) setIsRefreshing(false); 
+      finally { 
+        if (!isSilent) setIsRefreshing(false); 
+      }
     }
   };
 
@@ -130,7 +131,7 @@ export function BookingManager({ initialBookings = [], isLoading = false, defaul
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status }),
       });
-      setBookings((prev) => prev.map((b) => (b.id === id ? data : b)));
+      if (onUpdateBooking) onUpdateBooking(data);
       showToast(`Status berhasil diubah ke ${STATUS_CONFIG[status]?.label ?? status}`, "success");
       router.refresh();
       setSelected(null);
@@ -150,7 +151,7 @@ export function BookingManager({ initialBookings = [], isLoading = false, defaul
       if (!res.ok) throw new Error(data.error || "Gagal check-in");
       showToast("Check-in berhasil", "success");
       router.refresh();
-      await refresh();
+      if (onRefreshBookings) await onRefreshBookings();
       setSelected(null);
     } catch (e: any) {
       showToast(e.message || "Gagal check-in", "error");
@@ -167,23 +168,12 @@ export function BookingManager({ initialBookings = [], isLoading = false, defaul
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action }),
       });
-      setBookings((prev) => prev.map((b) => (b.id === id ? data : b)));
+      if (onUpdateBooking) onUpdateBooking(data);
       showToast(`Reschedule berhasil di-${action}`, "success");
       router.refresh();
       setSelected(null);
     } catch (e) { showToast(getErrorMessage(e) || "Gagal", "error"); }
     finally { setIsProcessing(false); }
-  };
-
-  const getTodayStr = () => {
-    const now = new Date();
-    return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().split('T')[0];
-  };
-
-  const getTomorrowStr = () => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    return new Date(tomorrow.getTime() - tomorrow.getTimezoneOffset() * 60000).toISOString().split('T')[0];
   };
 
   const filtered = useMemo(() => {
@@ -215,54 +205,6 @@ export function BookingManager({ initialBookings = [], isLoading = false, defaul
 
       {/* Filters Container */}
       <div className="flex flex-col gap-6 bg-[#0F0F0F]/40 backdrop-blur-md p-6 rounded-[1.5rem] shadow-xl border border-white/5">
-        {/* Row 1: Date Quick Filters & Date Picker */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-6">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em] mr-2">Date Filter:</span>
-            <button 
-              onClick={() => setDateFilter("")}
-              className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 active:scale-95 ${
-                dateFilter === "" 
-                  ? "bg-neon text-black shadow-md" 
-                  : "bg-white/5 text-white/40 hover:bg-white/10 hover:text-white border border-white/5"
-              }`}
-            >
-              Semua
-            </button>
-            <button 
-              onClick={() => setDateFilter(getTodayStr())}
-              className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 active:scale-95 ${
-                dateFilter === getTodayStr() 
-                  ? "bg-neon text-black shadow-md" 
-                  : "bg-white/5 text-white/40 hover:bg-white/10 hover:text-white border border-white/5"
-              }`}
-            >
-              Hari Ini
-            </button>
-            <button 
-              onClick={() => setDateFilter(getTomorrowStr())}
-              className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 active:scale-95 ${
-                dateFilter === getTomorrowStr() 
-                  ? "bg-neon text-black shadow-md" 
-                  : "bg-white/5 text-white/40 hover:bg-white/10 hover:text-white border border-white/5"
-              }`}
-            >
-              Besok
-            </button>
-          </div>
-          
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em] hidden md:inline">Custom Date:</span>
-            <input 
-              type="date"
-              value={dateFilter}
-              onChange={(e) => setDateFilter(e.target.value)}
-              className="px-4 py-2 bg-[#141414] border border-white/10 rounded-xl text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-neon/30 cursor-pointer w-full sm:w-auto transition-all"
-              style={{ colorScheme: 'dark' }}
-            />
-          </div>
-        </div>
-
         {/* Row 2: Search Input, Status, Sort & Refresh */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 items-center w-full">
           <div className="lg:col-span-6 w-full relative">
@@ -343,12 +285,20 @@ export function BookingManager({ initialBookings = [], isLoading = false, defaul
               
               <div className="p-6 flex-1 space-y-4">
                 <div>
-                  {/* Court name */}
-                  <h3 className="font-black text-white text-base tracking-tight uppercase italic pr-12 truncate" title={b.court?.name ?? "—"}>
-                    {b.court?.name ?? "—"}
+                  {/* Venue & Court Name */}
+                  <h3 className="font-black text-white text-base tracking-tight uppercase italic pr-12 truncate" title={b.court?.venue?.name ?? "Padel Venue"}>
+                    {b.court?.venue?.name ?? "Padel Venue"}
                   </h3>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-[10px] font-bold text-white/50 uppercase tracking-[0.2em] italic">
+                    <span className="flex items-center gap-1.5 text-white/70">
+                      <span className="w-1 h-1 rounded-full bg-neon"></span> {b.court?.name ?? "—"}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      · {b.court?.location ?? "—"}
+                    </span>
+                  </div>
                   {/* Date & Time */}
-                  <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest mt-1">
+                  <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest mt-2 border-t border-white/5 pt-2">
                     📅 {String(b.date).slice(0, 10)} · {formatMinutesToHHmm(b.startTime)}–{formatMinutesToHHmm(b.endTime)}
                   </p>
                 </div>
@@ -363,6 +313,11 @@ export function BookingManager({ initialBookings = [], isLoading = false, defaul
                   <div className="text-[9px] font-black text-neon bg-neon/10 border border-neon/20 px-2.5 py-1 rounded uppercase tracking-wider inline-block">
                     {b.bookingCode || "OLD RESERVATION"}
                   </div>
+                  {b.equipmentPackage && b.equipmentPackage !== "NONE" && (
+                    <div className="text-[9px] font-black bg-purple-500/10 border border-purple-500/20 px-2.5 py-1 rounded uppercase tracking-wider inline-block ml-2 text-purple-400 italic">
+                      ⚙️ {b.equipmentPackage === "STARTER" ? "Starter" : "Group"} Gear
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex justify-between items-center pt-2 border-t border-white/[0.03]">
@@ -417,12 +372,16 @@ export function BookingManager({ initialBookings = [], isLoading = false, defaul
               <div className="bg-white/5 border border-white/10 rounded-3xl p-6 space-y-4">
                 {[
                   ["Kode", selected.bookingCode || "—"],
+                  ["Venue", selected.court?.venue?.name ?? "—"],
                   ["Court", selected.court?.name ?? "—"],
                   ["Lokasi", selected.court?.location ?? "—"],
                   ["User", selected.user?.name ?? "—"],
                   ["WhatsApp", selected.user?.whatsapp ?? "—"],
                   ["Tanggal", String(selected.date).slice(0, 10)],
                   ["Jam", `${formatMinutesToHHmm(selected.startTime)} – ${formatMinutesToHHmm(selected.endTime)}`],
+                  ...(selected.equipmentPackage && selected.equipmentPackage !== "NONE" ? [
+                    ["Equipment", `${selected.equipmentPackage === "STARTER" ? "Starter Package (2 Rackets + 1 Ball Set)" : "Group Package (4 Rackets + 1 Ball Set)"}`]
+                  ] : []),
                   ["Total", `Rp ${Number(selected.totalPrice ?? 0).toLocaleString("id-ID")}`],
                   ["Payment", selected.payment?.status ?? "NOT_SUBMITTED"],
                 ].map(([l, v]) => (
@@ -466,35 +425,33 @@ export function BookingManager({ initialBookings = [], isLoading = false, defaul
                 </div>
               )}
 
-              {/* Payment Proof */}
-              <div>
-                <p className="text-[10px] font-black text-white/40 uppercase tracking-widest mb-3">Bukti Pembayaran</p>
-                {selected.paymentProofUrl || selected.payment?.proofImage ? (
-                  <div className="rounded-3xl overflow-hidden border border-white/10 bg-[#1A1A1A]">
-                    <img src={selected.paymentProofUrl ?? selected.payment?.proofImage}
-                      alt="Bukti" className="w-full object-contain max-h-80" />
+              {/* Midtrans Transaction Info */}
+              {(selected as any).midtransOrderId && (
+                <div className="bg-white/5 border border-white/10 rounded-3xl p-6 space-y-3">
+                  <p className="text-[10px] font-black text-neon uppercase tracking-widest">Midtrans Transaction</p>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">Order ID</span>
+                      <span className="text-xs font-bold text-white">{(selected as any).midtransOrderId}</span>
+                    </div>
+                    {(selected as any).midtransTransactionId && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">Transaction ID</span>
+                        <span className="text-xs font-bold text-white">{(selected as any).midtransTransactionId}</span>
+                      </div>
+                    )}
+                    {(selected as any).paymentMethod && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">Method</span>
+                        <span className="text-xs font-bold text-white uppercase">{(selected as any).paymentMethod}</span>
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <div className="rounded-3xl border border-dashed border-white/20 bg-white/5 h-32 flex items-center justify-center text-white/40 text-sm font-bold">
-                    Belum ada bukti
-                  </div>
-                )}
-              </div>
+                </div>
+              )}
 
               {/* Action Buttons */}
               <div className="space-y-3 pt-4">
-                {["PENDING", "PERLU_VERIFIKASI"].includes(selected.status) && (
-                  <div className="grid grid-cols-2 gap-3">
-                    <button disabled={isProcessing} onClick={() => patchStatus(selected.id, "CONFIRMED")}
-                      className="py-4 rounded-2xl bg-neon text-black text-xs font-black uppercase tracking-widest transition-all disabled:opacity-60 hover:bg-[#c4eb28] shadow-[0_0_20px_rgba(215,255,63,0.3)]">
-                      Approve
-                    </button>
-                    <button disabled={isProcessing} onClick={() => patchStatus(selected.id, "CANCELLED")}
-                      className="py-4 rounded-2xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 text-xs font-black uppercase tracking-widest transition-colors disabled:opacity-60">
-                      Reject
-                    </button>
-                  </div>
-                )}
                 {["CONFIRMED", "RESCHEDULE_APPROVED"].includes(selected.status) && (
                   <div className="flex flex-col gap-3">
                     <button disabled={isProcessing} onClick={() => checkIn(selected.bookingCode || "")}

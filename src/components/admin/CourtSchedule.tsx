@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatMinutesToHHmm, buildDailySlotLabels, rangesOverlap } from "@/lib/bookingTime";
 import { getErrorMessage } from "@/lib/errorMessage";
 
-type Court = { id: string; name: string; location: string };
+type Court = { id: string; name: string; location: string; venueId?: string; venue?: { id: string; name: string } };
 
 type Booking = {
   id: string;
@@ -38,7 +38,7 @@ export function CourtSchedule() {
   const [courts, setCourts] = useState<Court[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [date, setDate] = useState(todayISOLocal());
-  const [selectedCourtId, setSelectedCourtId] = useState<string>("all");
+  const [selectedVenueId, setSelectedVenueId] = useState<string>("all");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [tooltip, setTooltip] = useState<{ booking: Booking; x: number; y: number } | null>(null);
@@ -64,10 +64,30 @@ export function CourtSchedule() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const visibleCourts = useMemo(() =>
-    selectedCourtId === "all" ? courts : courts.filter((c) => c.id === selectedCourtId),
-    [courts, selectedCourtId],
-  );
+  const venues = useMemo(() => {
+    const map = new Map<string, { id: string; name: string }>();
+    courts.forEach((c) => {
+      if (c.venue) map.set(c.venue.id, { id: c.venue.id, name: c.venue.name });
+    });
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [courts]);
+
+  const visibleCourts = useMemo(() => {
+    if (selectedVenueId === "all") return courts;
+    return courts.filter((c) => c.venue?.id === selectedVenueId || c.venueId === selectedVenueId);
+  }, [courts, selectedVenueId]);
+
+  // Group by venue for table display
+  const groupedCourts = useMemo(() => {
+    const map = new Map<string, { venueName: string; courts: Court[] }>();
+    visibleCourts.forEach((c) => {
+      const vId = c.venue?.id || c.venueId || "unknown";
+      const vName = c.venue?.name || "Padel Venue";
+      if (!map.has(vId)) map.set(vId, { venueName: vName, courts: [] });
+      map.get(vId)!.courts.push(c);
+    });
+    return Array.from(map.values());
+  }, [visibleCourts]);
 
   // Filter bookings to the selected date
   const dayBookings = useMemo(() =>
@@ -123,17 +143,19 @@ export function CourtSchedule() {
           />
         </div>
         <div className="flex flex-col gap-2">
-          <label className="text-[10px] font-black text-white/40 uppercase tracking-widest">Lapangan</label>
-          <select
-            value={selectedCourtId}
-            onChange={(e) => setSelectedCourtId(e.target.value)}
-            className="px-4 py-2.5 bg-[#1A1A1A] border border-white/10 rounded-xl text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-neon"
-          >
-            <option value="all">Semua Lapangan</option>
-            {courts.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
+          <label className="text-[10px] font-black text-white/40 uppercase tracking-widest">Venue</label>
+          <div className="relative">
+            <select
+              value={selectedVenueId}
+              onChange={(e) => setSelectedVenueId(e.target.value)}
+              className="px-4 py-2.5 pr-10 bg-[#1A1A1A] border border-white/10 rounded-xl text-sm font-bold text-white hover:border-white/20 focus:outline-none focus:ring-2 focus:ring-neon transition-all appearance-none cursor-pointer bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'rgba(255,255,255,0.4)\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3E%3Cpath d=\'m6 9 6 6 6-6\'/%3E%3C/svg%3E')] bg-[length:1.25rem_1.25rem] bg-[right_1rem_center] bg-no-repeat"
+            >
+              <option value="all">Semua Venue</option>
+              {venues.map((v) => (
+                <option key={v.id} value={v.id}>{v.name}</option>
+              ))}
+            </select>
+          </div>
         </div>
         <button
           onClick={fetchData}
@@ -164,15 +186,24 @@ export function CourtSchedule() {
             <thead>
               <tr className="bg-[#1A1A1A] border-b border-white/5">
                 {/* Time header */}
-                <th className="sticky left-0 z-10 bg-[#1A1A1A] px-5 py-4 text-left text-[10px] font-black text-white/40 uppercase tracking-widest w-32 border-r border-white/5 shadow-[4px_0_10px_rgba(0,0,0,0.2)]">
+                <th rowSpan={2} className="sticky left-0 z-20 bg-[#1A1A1A] px-5 py-4 text-left text-[10px] font-black text-white/40 uppercase tracking-widest w-32 border-r border-white/5 shadow-[4px_0_10px_rgba(0,0,0,0.2)]">
                   Jam
                 </th>
-                {visibleCourts.map((court) => (
-                  <th key={court.id} className="px-4 py-4 text-center min-w-[150px]">
-                    <div className="text-sm font-black text-white tracking-tight">{court.name}</div>
-                    <div className="text-[10px] font-bold uppercase tracking-widest text-white/40 mt-1">{court.location}</div>
+                {groupedCourts.map((group) => (
+                  <th key={group.venueName} colSpan={group.courts.length} className="px-4 py-3 text-center border-b border-white/5 border-l border-white/5 bg-white/[0.02]">
+                    <div className="text-xs font-black text-neon uppercase tracking-widest italic">{group.venueName}</div>
                   </th>
                 ))}
+              </tr>
+              <tr className="bg-[#1A1A1A] border-b border-white/5">
+                {groupedCourts.map((group) =>
+                  group.courts.map((court) => (
+                    <th key={court.id} className="px-4 py-3 text-center min-w-[150px] border-l border-white/5">
+                      <div className="text-sm font-black text-white tracking-tight">{court.name}</div>
+                      <div className="text-[10px] font-bold uppercase tracking-widest text-white/40 mt-0.5">{court.location}</div>
+                    </th>
+                  ))
+                )}
               </tr>
             </thead>
             <tbody>
@@ -194,39 +225,42 @@ export function CourtSchedule() {
                         – {formatMinutesToHHmm(slot.end)}
                       </span>
                     </td>
-                    {/* Cells per court */}
-                    {visibleCourts.map((court) => {
-                      const booking = getCell(court, slot);
-                      if (!booking) {
+                    {/* Cells per court grouped */}
+                    {groupedCourts.map((group) =>
+                      group.courts.map((court) => {
+                        const booking = getCell(court, slot);
+                        const cellClass = "px-3 py-2 text-center border-l border-white/5";
+                        if (!booking) {
+                          return (
+                            <td key={court.id} className={cellClass}>
+                              <div className="rounded-xl border border-dashed border-emerald-500/20 bg-emerald-500/5 h-10 flex items-center justify-center">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-500/50">Tersedia</span>
+                              </div>
+                            </td>
+                          );
+                        }
+                        const cfg = statusConfig(booking.status);
                         return (
-                          <td key={court.id} className="px-3 py-2 text-center">
-                            <div className="rounded-xl border border-dashed border-emerald-500/20 bg-emerald-500/5 h-10 flex items-center justify-center">
-                              <span className="text-[10px] font-black uppercase tracking-widest text-emerald-500/50">Tersedia</span>
+                          <td key={court.id} className={cellClass}>
+                            <div
+                              className={`relative rounded-xl border ${cfg.bg} ${cfg.border} h-10 flex items-center justify-center px-3 cursor-pointer group transition-all hover:shadow-[0_0_15px_rgba(255,255,255,0.1)] hover:scale-[1.03] z-0 hover:z-20`}
+                              onMouseEnter={(e) =>
+                                setTooltip({
+                                  booking,
+                                  x: e.clientX,
+                                  y: e.clientY,
+                                })
+                              }
+                              onMouseLeave={() => setTooltip(null)}
+                            >
+                              <span className={`text-[10px] font-black uppercase tracking-widest ${cfg.text} truncate`}>
+                                {booking.user?.name ?? "—"}
+                              </span>
                             </div>
                           </td>
                         );
-                      }
-                      const cfg = statusConfig(booking.status);
-                      return (
-                        <td key={court.id} className="px-3 py-2 text-center">
-                          <div
-                            className={`relative rounded-xl border ${cfg.bg} ${cfg.border} h-10 flex items-center justify-center px-3 cursor-pointer group transition-all hover:shadow-[0_0_15px_rgba(255,255,255,0.1)] hover:scale-[1.03] z-0 hover:z-20`}
-                            onMouseEnter={(e) =>
-                              setTooltip({
-                                booking,
-                                x: e.clientX,
-                                y: e.clientY,
-                              })
-                            }
-                            onMouseLeave={() => setTooltip(null)}
-                          >
-                            <span className={`text-[10px] font-black uppercase tracking-widest ${cfg.text} truncate`}>
-                              {booking.user?.name ?? "—"}
-                            </span>
-                          </div>
-                        </td>
-                      );
-                    })}
+                      })
+                    )}
                   </tr>
                 );
               })}
