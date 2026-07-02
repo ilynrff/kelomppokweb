@@ -15,26 +15,10 @@ type Notification = {
 };
 
 const NOTIFICATION_ICONS: Record<string, React.ReactNode> = {
-  BOOKING: (
-    <span className="text-neon text-sm leading-none shrink-0 select-none">
-      ✅
-    </span>
-  ),
-  PAYMENT: (
-    <span className="text-amber-400 text-sm leading-none shrink-0 select-none">
-      ⏳
-    </span>
-  ),
-  MEMBERSHIP: (
-    <span className="text-violet-400 text-sm leading-none shrink-0 select-none">
-      💎
-    </span>
-  ),
-  SYSTEM: (
-    <span className="text-neon text-sm leading-none shrink-0 select-none">
-      🎾
-    </span>
-  ),
+  BOOKING: <span className="text-neon text-sm leading-none shrink-0 select-none">✅</span>,
+  PAYMENT: <span className="text-amber-400 text-sm leading-none shrink-0 select-none">⏳</span>,
+  MEMBERSHIP: <span className="text-violet-400 text-sm leading-none shrink-0 select-none">💎</span>,
+  SYSTEM: <span className="text-neon text-sm leading-none shrink-0 select-none">🎾</span>,
 };
 
 function formatRelativeTime(dateString: string) {
@@ -100,10 +84,7 @@ export function NotificationPanel() {
   // Handle click outside to close
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (
-        panelRef.current &&
-        !panelRef.current.contains(event.target as Node)
-      ) {
+      if (panelRef.current && !panelRef.current.contains(event.target as Node)) {
         setIsOpen(false);
       }
     };
@@ -120,7 +101,7 @@ export function NotificationPanel() {
       });
       if (res.ok) {
         setNotifications((prev) =>
-          prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)),
+          prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
         );
       }
     } catch (err) {
@@ -151,11 +132,8 @@ export function NotificationPanel() {
         className="relative w-10 h-10 rounded-full bg-black/60 backdrop-blur-md border border-white/10 hover:border-neon/40 text-white hover:text-neon flex items-center justify-center transition-all duration-300 shadow-[0_0_15px_rgba(0,0,0,0.5)] hover:shadow-[0_0_20px_rgba(215,255,63,0.15)] hover:scale-105 active:scale-95 group focus:outline-none"
         aria-label="Notifications"
       >
-        <Bell
-          size={16}
-          className="transition-transform duration-300 group-hover:rotate-12"
-        />
-
+        <Bell size={16} className="transition-transform duration-300 group-hover:rotate-12" />
+        
         {unreadCount > 0 && (
           <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-neon text-black text-[8px] font-black px-1 shadow-[0_0_10px_rgba(215,255,63,0.6)] border border-[#0B0B0B] animate-pulse">
             {unreadCount}
@@ -183,7 +161,7 @@ export function NotificationPanel() {
                   Stay updated with your activities
                 </p>
               </div>
-
+              
               {unreadCount > 0 && (
                 <button
                   onClick={markAllAsRead}
@@ -204,12 +182,9 @@ export function NotificationPanel() {
                     <div className="absolute inset-0 bg-neon/5 rounded-full blur-md pointer-events-none"></div>
                   </div>
                   <div>
-                    <p className="text-xs font-black text-white/60 uppercase tracking-widest italic">
-                      No notifications yet
-                    </p>
+                    <p className="text-xs font-black text-white/60 uppercase tracking-widest italic">No notifications yet</p>
                     <p className="text-[9px] text-white/30 font-medium leading-relaxed max-w-[200px] mx-auto mt-1">
-                      Your booking confirmations and club activities will gather
-                      here.
+                      Your booking confirmations and club activities will gather here.
                     </p>
                   </div>
                 </div>
@@ -230,28 +205,21 @@ export function NotificationPanel() {
                     )}
 
                     {/* Icon container */}
-                    <div
-                      className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border transition-colors
-                      ${
-                        !n.isRead
-                          ? "bg-white/5 border-white/10 text-white"
-                          : "bg-white/[0.01] border-white/5 text-white/30"
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border transition-colors
+                      ${!n.isRead 
+                        ? "bg-white/5 border-white/10 text-white" 
+                        : "bg-white/[0.01] border-white/5 text-white/30"
                       }
-                    `}
-                    >
-                      {NOTIFICATION_ICONS[n.type] || (
-                        <span className="text-xs">🎾</span>
-                      )}
+                    `}>
+                      {NOTIFICATION_ICONS[n.type] || <span className="text-xs">🎾</span>}
                     </div>
 
                     {/* Content */}
                     <div className="flex-1 min-w-0 space-y-1">
                       <div className="flex justify-between items-start gap-2">
-                        <p
-                          className={`text-xs font-black tracking-tight truncate transition-colors
+                        <p className={`text-xs font-black tracking-tight truncate transition-colors
                           ${!n.isRead ? "text-white" : "text-white/60"}
-                        `}
-                        >
+                        `}>
                           {n.title}
                         </p>
                         <span className="text-[8px] font-bold text-white/30 shrink-0 uppercase tracking-wider flex items-center gap-1">
