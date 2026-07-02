@@ -6,17 +6,11 @@ import Link from "next/link";
 import { Suspense, useEffect, useState } from "react";
 import { formatMinutesToHHmm } from "@/lib/bookingTime";
 import { fetchJson } from "@/lib/fetchJson";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { 
-  Check, 
   ArrowRight, 
-  LayoutDashboard, 
-  CalendarDays, 
   Clock, 
-  MapPin, 
-  Receipt,
-  Sparkles,
-  Zap
+  Sparkles
 } from "lucide-react";
 
 type Booking = {
@@ -55,159 +49,93 @@ function SuccessContent() {
   };
 
   const itemVariants = {
-    hidden: { opacity: 0, y: 20, filter: "blur(10px)" },
+    hidden: { opacity: 0, y: 20 },
     visible: { 
       opacity: 1, 
       y: 0, 
-      filter: "blur(0px)",
       transition: { duration: 0.8, ease: [0.16, 1, 0.3, 1] }
     }
   };
 
   return (
     <motion.div 
-      variants={containerVariants}
+      variants={containerVariants as any}
       initial="hidden"
       animate="visible"
-      className="w-full max-w-2xl space-y-12 relative z-10 py-20"
+      className="w-full max-w-[550px] flex flex-col items-center z-10 py-10"
     >
-      {/* 1. HERO TOP - Centered Success State */}
-      <div className="flex flex-col items-center text-center space-y-8">
-        <motion.div 
-          variants={itemVariants}
-          className="relative group"
-        >
-          {/* Animated Glow Backdrop */}
-          <div className="absolute inset-0 bg-neon/30 blur-[60px] rounded-full animate-pulse-slow"></div>
-          
-          {/* Neon Success Badge */}
-          <div className="w-32 h-32 rounded-full bg-white/[0.03] border border-white/10 backdrop-blur-3xl flex items-center justify-center relative z-10">
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ type: "spring", stiffness: 200, damping: 15, delay: 0.5 }}
-              className="w-24 h-24 rounded-full bg-neon/10 border border-neon/40 flex items-center justify-center text-neon shadow-[0_0_40px_rgba(215,255,63,0.3)]"
-            >
-              <Check size={48} strokeWidth={3} className="drop-shadow-[0_0_10px_rgba(215,255,63,0.5)]" />
-            </motion.div>
-            
-            {/* Subtle Rotating Border */}
-            <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
-              className="absolute inset-2 border border-dashed border-neon/20 rounded-full"
-            />
+      {/* TOP SECTION */}
+      <motion.div variants={itemVariants as any} className="flex flex-col items-center text-center space-y-4 mb-8">
+        <div className="relative group">
+          <div className="absolute inset-0 bg-amber-500/20 blur-[30px] rounded-full"></div>
+          <div className="w-20 h-20 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 relative z-10 shadow-[0_0_30px_rgba(245,158,11,0.2)]">
+            <Clock size={36} strokeWidth={2.5} />
           </div>
-        </motion.div>
+        </div>
 
-        <motion.div variants={itemVariants} className="space-y-4">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-white/40 text-[10px] font-black uppercase tracking-[0.4em] italic">
-            <Sparkles size={12} className="text-neon" /> Reservation Secured
+        <div className="space-y-2">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-white/40 text-[9px] font-black uppercase tracking-[0.2em] italic">
+            <Sparkles size={10} className="text-neon" /> Reservation Secured
           </div>
-          <h1 className="text-5xl md:text-7xl font-black text-white italic uppercase tracking-tighter leading-tight">
-            BOOKING <span className="text-neon drop-shadow-[0_0_15px_rgba(215,255,63,0.3)]">BERHASIL.</span>
-          </h1>
-          <p className="text-white/40 font-medium text-lg italic max-w-md mx-auto leading-relaxed">
-            Konfirmasi pembayaran dalam waktu <span className="text-white">15 menit</span> agar slot tidak kedaluwarsa otomatis.
+          <h1 className="text-3xl font-black text-white italic uppercase tracking-tight">Booking Berhasil</h1>
+          <p className="text-white/60 text-sm font-medium max-w-sm">
+            Konfirmasi pembayaran dalam waktu <span className="text-white font-bold">15 menit</span> agar slot tidak kedaluwarsa otomatis.
           </p>
-        </motion.div>
-      </div>
-
-      {/* 2. MAIN BOOKING CARD - Dark Glass Card */}
-      <motion.div variants={itemVariants} className="relative group">
-        <div className="absolute -inset-[1px] bg-gradient-to-br from-neon/30 via-transparent to-transparent rounded-[3rem] blur-[1px] group-hover:blur-md transition-all duration-700"></div>
-        <div className="relative bg-[#0F0F0F]/80 backdrop-blur-3xl border border-white/10 rounded-[3rem] p-8 md:p-12 overflow-hidden">
-          {/* Decorative Elements */}
-          <div className="absolute top-0 right-0 p-12 opacity-[0.03] rotate-12">
-            <Receipt size={180} />
-          </div>
-
-          <div className="relative z-10 space-y-12">
-            {/* Booking Code Header */}
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-white/5 pb-10">
-              <div className="space-y-1">
-                <p className="text-[10px] font-black text-white/20 uppercase tracking-[0.4em]">Booking Code</p>
-                <h2 className="text-2xl md:text-3xl font-black text-white italic uppercase tracking-widest leading-none">
-                  {data?.bookingCode || "PDL-X-XXXX-XXX"}
-                </h2>
-              </div>
-              <div className="px-5 py-2 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-500 text-[10px] font-black uppercase tracking-[0.2em] italic flex items-center gap-2 shadow-[0_0_20px_rgba(245,158,11,0.1)]">
-                <Clock size={12} /> Pending Payment
-              </div>
-            </div>
-
-            {/* Content Grid */}
-            <div className="grid md:grid-cols-2 gap-10">
-              <div className="space-y-8">
-                <DetailItem icon={<MapPin size={16} />} label="Court Location" value={data?.court?.name || "Premium Court"} />
-                <DetailItem icon={<CalendarDays size={16} />} label="Match Date" value={data ? String(data.date).slice(0, 10) : "--"} />
-              </div>
-              <div className="space-y-8">
-                <DetailItem 
-                  icon={<Zap size={16} />} 
-                  label="Time Slot" 
-                  value={data ? `${formatMinutesToHHmm(data.startTime)} - ${formatMinutesToHHmm(data.endTime)}` : "--"} 
-                />
-                <DetailItem icon={<LayoutDashboard size={16} />} label="Reservation ID" value={data?.id.slice(0, 8).toUpperCase() || "--"} />
-              </div>
-            </div>
-
-            {/* Total Payment Focus */}
-            <div className="pt-10 border-t border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-6">
-              <div className="space-y-1">
-                <p className="text-[10px] font-black text-white/20 uppercase tracking-[0.4em]">Total Payment</p>
-                <p className="text-4xl md:text-5xl font-black text-neon italic leading-none drop-shadow-[0_0_20px_rgba(215,255,63,0.3)]">
-                  Rp {Number(data?.totalPrice || 0).toLocaleString("id-ID")}
-                </p>
-              </div>
-              
-              <div className="flex flex-col md:flex-row gap-4">
-                <Link href="/dashboard" className="w-full md:w-auto">
-                  <Button className="h-16 px-10 bg-white text-black font-black italic uppercase tracking-[0.2em] rounded-2xl hover:bg-neon hover:scale-[1.02] active:scale-95 transition-all shadow-[0_15px_30px_-10px_rgba(255,255,255,0.2)]">
-                    Dashboard <ArrowRight size={18} className="ml-2" />
-                  </Button>
-                </Link>
-              </div>
-            </div>
-          </div>
         </div>
       </motion.div>
 
-      {/* 3. SECONDARY CTA */}
-      <motion.div variants={itemVariants} className="flex justify-center">
-        <Link href="/booking">
-          <button className="px-8 py-4 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 text-white/40 hover:text-white font-black text-[10px] uppercase tracking-[0.4em] italic transition-all group">
-            <span className="flex items-center gap-3">
-              Book Another Court <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
-            </span>
+      {/* MIDDLE SECTION - Single booking details card */}
+      <motion.div variants={itemVariants as any} className="w-full bg-[#0F0F0F] border border-white/10 rounded-[2rem] p-6 space-y-4 shadow-2xl mb-8">
+        {/* Booking Code */}
+        <div className="flex justify-between items-center text-sm pb-4 border-b border-white/5">
+          <span className="text-white/40 font-bold uppercase tracking-wider text-[10px]">Booking Code</span>
+          <span className="text-white font-black tracking-wider uppercase font-mono">{data?.bookingCode || "..."}</span>
+        </div>
+
+        {/* Court Name */}
+        <div className="flex justify-between items-center text-sm pb-4 border-b border-white/5">
+          <span className="text-white/40 font-bold uppercase tracking-wider text-[10px]">Court Name</span>
+          <span className="text-white font-bold">{data?.court?.name || "..."}</span>
+        </div>
+
+        {/* Date */}
+        <div className="flex justify-between items-center text-sm pb-4 border-b border-white/5">
+          <span className="text-white/40 font-bold uppercase tracking-wider text-[10px]">Date</span>
+          <span className="text-white font-bold">{data ? String(data.date).slice(0, 10) : "..."}</span>
+        </div>
+
+        {/* Time */}
+        <div className="flex justify-between items-center text-sm pb-4 border-b border-white/5">
+          <span className="text-white/40 font-bold uppercase tracking-wider text-[10px]">Time</span>
+          <span className="text-white font-bold">
+            {data ? `${formatMinutesToHHmm(data.startTime)} - ${formatMinutesToHHmm(data.endTime)}` : "..."}
+          </span>
+        </div>
+
+        {/* Total Paid / To Pay */}
+        <div className="flex justify-between items-center text-sm">
+          <span className="text-white/40 font-bold uppercase tracking-wider text-[10px]">Total Paid</span>
+          <span className="text-neon font-black text-lg drop-shadow-[0_0_10px_rgba(215,255,63,0.3)]">
+            Rp {Number(data?.totalPrice || 0).toLocaleString("id-ID")}
+          </span>
+        </div>
+      </motion.div>
+
+      {/* BOTTOM SECTION */}
+      <motion.div variants={itemVariants as any} className="w-full flex flex-col items-center space-y-4">
+        <Link href="/dashboard" className="w-full">
+          <Button className="w-full h-12 bg-neon hover:bg-neon/90 text-black font-black uppercase tracking-widest text-[10px] rounded-xl hover:scale-[1.02] active:scale-95 transition-all shadow-[0_0_20px_rgba(215,255,63,0.25)]">
+            Dashboard <ArrowRight size={14} className="ml-2" />
+          </Button>
+        </Link>
+
+        <Link href="/booking" className="w-full">
+          <button className="w-full h-12 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-white/50 hover:text-white font-black text-[10px] uppercase tracking-widest italic transition-all">
+            Book Another Court
           </button>
         </Link>
       </motion.div>
-
-      <style jsx global>{`
-        @keyframes pulse-slow {
-          0%, 100% { opacity: 0.1; transform: scale(1); }
-          50% { opacity: 0.3; transform: scale(1.1); }
-        }
-        .animate-pulse-slow {
-          animation: pulse-slow 5s ease-in-out infinite;
-        }
-      `}</style>
     </motion.div>
-  );
-}
-
-function DetailItem({ icon, label, value }: { icon: React.ReactNode, label: string, value: string }) {
-  return (
-    <div className="flex gap-4 group/item">
-      <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white/20 group-hover/item:text-neon group-hover/item:border-neon/30 transition-all duration-500">
-        {icon}
-      </div>
-      <div className="space-y-1">
-        <p className="text-[10px] font-black text-white/20 uppercase tracking-widest">{label}</p>
-        <p className="text-sm font-black text-white uppercase italic tracking-tight">{value}</p>
-      </div>
-    </div>
   );
 }
 
@@ -223,7 +151,7 @@ export default function BookingSuccessPage() {
       </div>
 
       <Suspense fallback={
-        <div className="animate-pulse w-full max-w-2xl h-[600px] bg-white/[0.02] rounded-[3rem] border border-white/5 shadow-2xl"></div>
+        <div className="animate-pulse w-full max-w-[550px] h-[400px] bg-white/[0.02] rounded-[2rem] border border-white/5 shadow-2xl"></div>
       }>
         <SuccessContent />
       </Suspense>

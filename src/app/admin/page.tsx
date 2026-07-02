@@ -17,72 +17,66 @@ export default async function AdminPage() {
   await manageBookingLifecycle();
 
   // Fetch initial data on server
-  const [bookings, courts, membershipRequests] = await Promise.all([
+  const [bookings, courts, membershipRequests, users, openMatches] = await Promise.all([
     prisma.booking.findMany({
       include: {
-        user: { select: { name: true, whatsapp: true } },
-        court: { select: { id: true, name: true, location: true } },
+        user: { select: { id: true, name: true, whatsapp: true, membership: true, membershipStatus: true } },
+        court: { select: { id: true, name: true, location: true, pricePerHour: true, venue: { select: { name: true } } } },
         payment: true,
       },
       orderBy: { createdAt: "desc" },
     }),
-    prisma.court.findMany({ orderBy: { name: "asc" } }),
+    prisma.court.findMany({ 
+      include: { venue: true },
+      orderBy: { name: "asc" } 
+    }),
     prisma.membershipRequest.findMany({
       include: { user: { select: { name: true, whatsapp: true } } },
       orderBy: { createdAt: "desc" },
     }),
+    prisma.user.findMany({
+      include: {
+        bookings: {
+          include: {
+            court: { select: { name: true, location: true } },
+            payment: true,
+          }
+        },
+        membershipRequests: true,
+      },
+      orderBy: { name: "asc" },
+    }),
+    prisma.openMatch.findMany({
+      include: {
+        booking: {
+          include: {
+            court: { select: { name: true, location: true, venue: { select: { name: true } } } },
+          }
+        },
+        host: { select: { name: true, whatsapp: true } },
+        players: {
+          include: {
+            player: { select: { name: true, whatsapp: true } }
+          }
+        }
+      },
+      orderBy: { createdAt: "desc" },
+    }),
   ]);
 
-  // Calculate stats
-  const totalBookings = bookings.length;
-  const pendingCount = bookings.filter((b) => b.status === "PENDING").length;
-  const needVerif = bookings.filter((b) => b.status === "PERLU_VERIFIKASI").length;
-  const confirmedCount = bookings.filter(
-    (b) => ["CONFIRMED", "RESCHEDULE_APPROVED"].includes(b.status),
-  ).length;
-  const totalRevenue = bookings
-    .filter((b) => ["CONFIRMED", "RESCHEDULE_APPROVED", "COMPLETED"].includes(b.status))
-    .reduce((sum, b) => sum + Number(b.totalPrice || 0), 0);
-  const rescheduleRequests = bookings.filter((b) => b.status === "RESCHEDULE_REQUESTED").length;
-
-  const stats = [
-    {
-      label: "Total Booking",
-      value: totalBookings,
-      icon: <span className="text-2xl">📋</span>,
-      color: "blue",
-    },
-    {
-      label: "Perlu Tindakan",
-      value: needVerif + rescheduleRequests + pendingCount,
-      trend: `${needVerif} verifikasi · ${rescheduleRequests} reschedule`,
-      icon: <span className="text-2xl">⚡</span>,
-      color: "yellow",
-    },
-    {
-      label: "Confirmed Aktif",
-      value: confirmedCount,
-      trend: `${courts.length} lapangan terdaftar`,
-      icon: <span className="text-2xl">✅</span>,
-      color: "green",
-    },
-    {
-      label: "Total Revenue",
-      value: `Rp ${totalRevenue.toLocaleString("id-ID")}`,
-      trend: "Dari booking confirmed",
-      icon: <span className="text-2xl">💰</span>,
-      color: "purple",
-    },
-  ];
-
-  // Serialize dates for client components
+  // Serialize bookings
   const serializedBookings = bookings.map((b) => ({
     ...b,
     date: b.date.toISOString(),
     createdAt: b.createdAt.toISOString(),
     updatedAt: b.updatedAt.toISOString(),
-    expiresAt: b.expiresAt?.toISOString() ?? undefined,
+    expiresAt: b.expiresAt.toISOString(),
     rescheduleDate: b.rescheduleDate?.toISOString() ?? null,
+    paymentApprovedAt: b.paymentApprovedAt 
+      ? b.paymentApprovedAt.toISOString() 
+      : (["CONFIRMED", "COMPLETED", "CHECKED_IN", "RESCHEDULE_APPROVED"].includes(b.status) 
+          ? b.updatedAt.toISOString() 
+          : null),
     payment: b.payment
       ? {
           ...b.payment,
@@ -99,12 +93,74 @@ export default async function AdminPage() {
     updatedAt: r.updatedAt.toISOString(),
   }));
 
+  const serializedUsers = users.map((u) => ({
+    ...u,
+    createdAt: u.createdAt.toISOString(),
+    updatedAt: u.updatedAt.toISOString(),
+    membershipExpiresAt: u.membershipExpiresAt?.toISOString() ?? null,
+    bookings: u.bookings.map((b) => ({
+      ...b,
+      date: b.date.toISOString(),
+      createdAt: b.createdAt.toISOString(),
+      updatedAt: b.updatedAt.toISOString(),
+      expiresAt: b.expiresAt.toISOString(),
+      rescheduleDate: b.rescheduleDate?.toISOString() ?? null,
+      paymentApprovedAt: b.paymentApprovedAt 
+        ? b.paymentApprovedAt.toISOString() 
+        : (["CONFIRMED", "COMPLETED", "CHECKED_IN", "RESCHEDULE_APPROVED"].includes(b.status) 
+            ? b.updatedAt.toISOString() 
+            : null),
+    })),
+    membershipRequests: u.membershipRequests.map((r) => ({
+      ...r,
+      createdAt: r.createdAt.toISOString(),
+      updatedAt: r.updatedAt.toISOString(),
+    })),
+  }));
+
+  const serializedOpenMatches = openMatches.map((m) => ({
+    ...m,
+    createdAt: m.createdAt.toISOString(),
+    updatedAt: m.updatedAt.toISOString(),
+    booking: {
+      ...m.booking,
+      date: m.booking.date.toISOString(),
+      createdAt: m.booking.createdAt.toISOString(),
+      updatedAt: m.booking.updatedAt.toISOString(),
+      expiresAt: m.booking.expiresAt.toISOString(),
+      rescheduleDate: m.booking.rescheduleDate?.toISOString() ?? null,
+      paymentApprovedAt: m.booking.paymentApprovedAt 
+        ? m.booking.paymentApprovedAt.toISOString() 
+        : (["CONFIRMED", "COMPLETED", "CHECKED_IN", "RESCHEDULE_APPROVED"].includes(m.booking.status) 
+            ? m.booking.updatedAt.toISOString() 
+            : null),
+      court: m.booking.court ? {
+        ...m.booking.court,
+      } : null,
+    },
+    players: m.players.map((p) => ({
+      ...p,
+      createdAt: p.createdAt.toISOString(),
+      player: {
+        ...p.player
+      }
+    })),
+  }));
+
+  const serializedCourts = courts.map((c) => ({
+    ...c,
+    createdAt: c.createdAt.toISOString(),
+    updatedAt: c.updatedAt.toISOString(),
+  }));
+
   return (
     <Suspense fallback={<div className="min-h-screen bg-[#0B0B0B]" />}>
       <AdminDashboard 
         initialBookings={serializedBookings} 
-        stats={stats} 
         membershipRequests={serializedMembershipRequests}
+        initialUsers={serializedUsers}
+        initialOpenMatches={serializedOpenMatches}
+        initialCourts={serializedCourts}
         session={session}
       />
     </Suspense>
