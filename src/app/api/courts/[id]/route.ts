@@ -5,55 +5,70 @@ import prisma from "@/lib/prisma";
 import { getErrorMessage } from "@/lib/errorMessage";
 import { normalizeImages } from "@/lib/courtUtils";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
-
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
-  console.log("API: Updating court...", params.id);
   try {
     const session = await getServerSession(authOptions);
     if (!session || session.user.role !== "ADMIN") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body: unknown = await req.json();
-    const payload = (body ?? {}) as Record<string, unknown>;
-    const { name, location, pricePerHour, images, description } = payload;
+    const payload = await req.json();
+    const name = payload.name;
+    const type = payload.type;
+    const location = payload.location;
+    const pricePerHour = payload.pricePerHour;
+    const images = payload.images;
+    const description = payload.description;
+    const isActive = payload.isActive;
+    const venueId = payload.venueId;
 
-    const finalImages = images !== undefined ? normalizeImages(images) : undefined;
- 
-    const updated = await prisma.court.update({
+    const dataToUpdate: any = {};
+    if (name !== undefined) dataToUpdate.name = String(name);
+    if (type !== undefined) dataToUpdate.type = type ? String(type) : null;
+    if (location !== undefined) dataToUpdate.location = String(location);
+    if (pricePerHour !== undefined) dataToUpdate.pricePerHour = Math.round(Number(pricePerHour));
+    if (images !== undefined) dataToUpdate.images = normalizeImages(images);
+    if (description !== undefined) dataToUpdate.description = description ? String(description) : null;
+    if (isActive !== undefined) dataToUpdate.isActive = Boolean(isActive);
+    if (venueId !== undefined) dataToUpdate.venueId = String(venueId);
+
+    const court = await prisma.court.update({
       where: { id: params.id },
-      data: {
-        ...(name !== undefined ? { name: String(name) } : {}),
-        ...(location !== undefined ? { location: String(location) } : {}),
-        ...(pricePerHour !== undefined
-          ? { pricePerHour: Math.round(Number(pricePerHour)) }
-          : {}),
-        ...(finalImages !== undefined ? { images: finalImages } : {}),
-        ...(description !== undefined ? { description: description ? String(description) : null } : {}),
-      },
+      data: dataToUpdate,
     });
 
-    return NextResponse.json(updated, { status: 200 });
+    return NextResponse.json(court, { status: 200 });
   } catch (error: unknown) {
-    console.error("API Error [PATCH /api/courts/[id]]:", error);
     return NextResponse.json({ error: "Failed to update court.", details: getErrorMessage(error) }, { status: 500 });
   }
 }
 
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
-  console.log("API: Deleting court...", params.id);
+export async function DELETE(req: Request, { params }: { params: { id: string } }) {
   try {
     const session = await getServerSession(authOptions);
     if (!session || session.user.role !== "ADMIN") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    await prisma.court.delete({ where: { id: params.id } });
+    // Check if there are bookings for this court
+    const bookingCount = await prisma.booking.count({
+      where: { courtId: params.id }
+    });
+
+    if (bookingCount > 0) {
+      // Instead of throwing an error, we should probably set isActive to false to prevent future bookings
+      // but if the user explicitly clicked "delete", they want it gone.
+      // Wait, deleting a court with bookings will crash Prisma because of relation unless onCascade delete.
+      // Let's soft delete or block. Let's just block deletion.
+      return NextResponse.json({ error: "Cannot delete court with existing bookings." }, { status: 400 });
+    }
+
+    await prisma.court.delete({
+      where: { id: params.id },
+    });
+
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (error: unknown) {
-    console.error("API Error [DELETE /api/courts/[id]]:", error);
     return NextResponse.json({ error: "Failed to delete court.", details: getErrorMessage(error) }, { status: 500 });
   }
 }

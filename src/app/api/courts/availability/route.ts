@@ -31,7 +31,7 @@
           date: queryDate,
           status: { in: ["PENDING", "CONFIRMED", "PERLU_VERIFIKASI", "RESCHEDULE_REQUESTED", "RESCHEDULE_APPROVED"] },
         },
-        select: { startTime: true, endTime: true },
+        select: { startTime: true, endTime: true, openMatch: { select: { status: true } } },
       });
 
       const slots = buildDailySlotLabels();
@@ -52,11 +52,30 @@
         }
       }
 
+      const overlappingBooking = existingBookings.find((b) =>
+        rangesOverlap({ start: b.startTime, end: b.endTime }, { start: s.start, end: s.end }),
+      );
+
+      let status = "AVAILABLE";
+      if (isPastTime) {
+        status = "UNAVAILABLE";
+      } else if (overlappingBooking) {
+        if (overlappingBooking.openMatch) {
+          const matchStatus = overlappingBooking.openMatch.status;
+          if (matchStatus === "ONGOING") {
+            status = "LIVE_MATCH";
+          } else {
+            status = "OPEN_MATCH";
+          }
+        } else {
+          status = "BOOKED";
+        }
+      }
+
       return {
         time: s.label,
-        available: !isPastTime && !existingBookings.some((b) =>
-          rangesOverlap({ start: b.startTime, end: b.endTime }, { start: s.start, end: s.end }),
-        ),
+        available: status === "AVAILABLE",
+        status: status,
       };
     });
 
