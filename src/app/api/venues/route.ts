@@ -13,16 +13,23 @@ export async function GET() {
       orderBy: { name: "asc" },
       include: {
         courts: {
-          orderBy: { name: "asc" }
-        }
-      }
+          orderBy: { name: "asc" },
+        },
+      },
     });
     return NextResponse.json(venues, { status: 200 });
   } catch (error: any) {
-    return NextResponse.json({
-      error: "Failed to fetch venues.",
-      details: getErrorMessage(error),
-    }, { status: 500 });
+    console.error("===== API /api/venues ERROR =====");
+    console.error(error);
+
+    return NextResponse.json(
+      {
+        error: "Failed to fetch venues.",
+        details: error?.message,
+        stack: error?.stack,
+      },
+      { status: 500 },
+    );
   }
 }
 
@@ -35,9 +42,14 @@ export async function POST(req: Request) {
 
     const payload = await req.json();
     const name = String(payload.name || "");
-    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+    const slug = name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)+/g, "");
     const location = String(payload.location || "");
-    const description = payload.description ? String(payload.description) : null;
+    const description = payload.description
+      ? String(payload.description)
+      : null;
     const thumbnail = payload.thumbnail ? String(payload.thumbnail) : null;
 
     if (!name || !location) {
@@ -47,8 +59,10 @@ export async function POST(req: Request) {
     // Check slug uniqueness
     let finalSlug = slug;
     let counter = 1;
-    while(true) {
-      const exists = await prisma.venue.findUnique({ where: { slug: finalSlug } });
+    while (true) {
+      const exists = await prisma.venue.findUnique({
+        where: { slug: finalSlug },
+      });
       if (!exists) break;
       finalSlug = `${slug}-${counter}`;
       counter++;
@@ -62,11 +76,14 @@ export async function POST(req: Request) {
         description,
         thumbnail,
       },
-      include: { courts: true }
+      include: { courts: true },
     });
 
     return NextResponse.json(venue, { status: 201 });
   } catch (error: unknown) {
-    return NextResponse.json({ error: "Failed to create venue.", details: getErrorMessage(error) }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to create venue.", details: getErrorMessage(error) },
+      { status: 500 },
+    );
   }
 }

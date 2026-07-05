@@ -9,6 +9,7 @@ delete (global as any).prisma;
 const globalForPrisma = global as unknown as { prisma: PrismaClient };
 
 const connectionString = process.env.DATABASE_URL;
+console.log("DATABASE_URL =", process.env.DATABASE_URL);
 
 const createPrismaClient = () => {
   if (connectionString) {
