@@ -478,7 +478,6 @@ export default function Home() {
             loop
             playsInline
             className="w-full h-full object-cover opacity-70"
-            poster="/images/hero-padel.jpg"
           >
             <source src="/videos/hero.mp4" type="video/mp4" />
           </video>
