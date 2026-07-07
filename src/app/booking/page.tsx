@@ -36,15 +36,27 @@ export default function BookingPage() {
     return openMatches.filter((m) => {
       if (m.status === "CANCELED") return false;
 
-      // An Open Match becomes EXPIRED when current Jakarta date/time is GREATER THAN match playDate + session endTime
-      const now = new Date();
-      const localNow = new Date(now.getTime() + 7 * 60 * 60 * 1000);
-      const localTodayStr = localNow.toISOString().split("T")[0];
+      // Use Intl to get Jakarta components
+      const formatter = new Intl.DateTimeFormat("en-US", {
+        timeZone: "Asia/Jakarta",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      });
+      const parts = formatter.formatToParts(new Date());
+      const map: Record<string, string> = {};
+      for (const part of parts) {
+        map[part.type] = part.value;
+      }
+      const localTodayStr = `${map.year}-${map.month}-${map.day}`;
+      const nowMinutes = parseInt(map.hour, 10) * 60 + parseInt(map.minute, 10);
       
       const booking = m.booking;
       if (!booking) return false;
       const bookingDateStr = new Date(booking.date).toISOString().split("T")[0];
-      const nowMinutes = localNow.getUTCHours() * 60 + localNow.getUTCMinutes();
 
       if (bookingDateStr < localTodayStr) return false;
       if (bookingDateStr > localTodayStr) return true;

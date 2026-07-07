@@ -23,32 +23,69 @@ export function CalendarView({
   membershipStatus,
   onLockedDateClick 
 }: CalendarViewProps) {
-  const [currentViewDate, setCurrentViewDate] = useState(new Date());
+  const getJakartaDateComponents = (d: Date = new Date()) => {
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Jakarta",
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+    });
+    const parts = formatter.formatToParts(d);
+    const map: Record<string, number> = {};
+    for (const part of parts) {
+      if (part.type !== "literal") {
+        map[part.type] = parseInt(part.value, 10);
+      }
+    }
+    return {
+      year: map.year,
+      month: map.month, // 1-12
+      day: map.day,
+    };
+  };
+
+  const [currentViewDate, setCurrentViewDate] = useState(() => {
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Jakarta",
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+    });
+    const parts = formatter.formatToParts(new Date());
+    const map: Record<string, number> = {};
+    for (const part of parts) {
+      if (part.type !== "literal") {
+        map[part.type] = parseInt(part.value, 10);
+      }
+    }
+    return new Date(Date.UTC(map.year, map.month - 1, 1));
+  });
+  
   const [availability, setAvailability] = useState<DayAvailability[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   const today = useMemo(() => {
-    const now = new Date();
-    return new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+    const { year, month, day } = getJakartaDateComponents();
+    return new Date(Date.UTC(year, month - 1, day));
   }, []);
 
   const monthStart = useMemo(() => {
-    return new Date(Date.UTC(currentViewDate.getFullYear(), currentViewDate.getMonth(), 1));
+    return new Date(Date.UTC(currentViewDate.getUTCFullYear(), currentViewDate.getUTCMonth(), 1));
   }, [currentViewDate]);
 
   const monthEnd = useMemo(() => {
-    return new Date(Date.UTC(currentViewDate.getFullYear(), currentViewDate.getMonth() + 1, 0));
+    return new Date(Date.UTC(currentViewDate.getUTCFullYear(), currentViewDate.getUTCMonth() + 1, 0));
   }, [currentViewDate]);
 
   const isNextMonthAvailable = useMemo(() => {
-    const now = new Date();
-    const nextMonthLimit = new Date(Date.UTC(now.getFullYear(), now.getMonth() + 1, 1));
+    const { year, month } = getJakartaDateComponents();
+    const nextMonthLimit = new Date(Date.UTC(year, month, 1));
     return currentViewDate < nextMonthLimit;
   }, [currentViewDate]);
 
   const isPrevMonthAvailable = useMemo(() => {
-    const now = new Date();
-    const currentMonthStart = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
+    const { year, month } = getJakartaDateComponents();
+    const currentMonthStart = new Date(Date.UTC(year, month - 1, 1));
     return currentViewDate > currentMonthStart;
   }, [currentViewDate]);
 

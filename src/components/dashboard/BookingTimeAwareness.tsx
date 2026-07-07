@@ -24,15 +24,28 @@ export function BookingTimeAwareness({ booking }: { booking: Booking }) {
   const dateStr = String(booking.date).split("T")[0];
   const [year, month, day] = dateStr.split("-").map(Number);
   
-  const startDateTime = new Date(year, month - 1, day, 0, booking.startTime);
-  const endDateTime = new Date(year, month - 1, day, 0, booking.endTime);
+  const startEpoch = Date.UTC(year, month - 1, day, 0, booking.startTime) - 7 * 60 * 60 * 1000;
+  const endEpoch = Date.UTC(year, month - 1, day, 0, booking.endTime) - 7 * 60 * 60 * 1000;
 
-  const diffMs = startDateTime.getTime() - now.getTime();
+  const diffMs = startEpoch - now.getTime();
   const diffMins = Math.floor(diffMs / 60000);
   
-  const isToday = startDateTime.toDateString() === now.toDateString();
-  const isExpired = now > endDateTime;
-  const isPlaying = now >= startDateTime && now <= endDateTime;
+  const jakartaFormatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Jakarta",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const parts = jakartaFormatter.formatToParts(now);
+  const map: Record<string, string> = {};
+  for (const part of parts) {
+    map[part.type] = part.value;
+  }
+  const jakartaTodayStr = `${map.year}-${map.month}-${map.day}`;
+  
+  const isToday = dateStr === jakartaTodayStr;
+  const isExpired = now.getTime() > endEpoch;
+  const isPlaying = now.getTime() >= startEpoch && now.getTime() <= endEpoch;
 
   if (isExpired) {
     return (

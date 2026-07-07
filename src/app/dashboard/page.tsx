@@ -2,7 +2,7 @@
 
 export const dynamic = "force-dynamic";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -14,12 +14,12 @@ import { PaymentDeadlineCountdown } from "@/components/dashboard/PaymentDeadline
 import { PaymentDeadlineBadge } from "@/components/dashboard/PaymentDeadlineBadge";
 import { RescheduleModal } from "@/components/dashboard/RescheduleModal";
 import { BookingTimeAwareness } from "@/components/dashboard/BookingTimeAwareness";
-import { formatMinutesToHHmm } from "@/lib/bookingTime";
+import { formatMinutesToHHmm, getOpenMatchLifecycleState } from "@/lib/bookingTime";
 import { getErrorMessage } from "@/lib/errorMessage";
 import { fetchJson } from "@/lib/fetchJson";
 import { MembershipStatusCard } from "@/components/profile/MembershipStatusCard";
 import { UpgradeInvitationCard } from "@/components/dashboard/UpgradeInvitationCard";
-import { Crown, Star, CalendarDays, Activity, ShieldCheck, Gem, Clock, AlertCircle } from "lucide-react";
+import { Crown, Star, CalendarDays, Activity, ShieldCheck, Gem, Clock, AlertCircle, MapPin, Share2, Users, CheckCircle2, Flame, Award, Heart, PlusCircle, Trophy } from "lucide-react";
 import { CreateOpenMatchModal } from "@/components/dashboard/CreateOpenMatchModal";
 import { AnimatePresence } from "framer-motion";
 
@@ -43,28 +43,50 @@ type Booking = {
   totalPrice: number;
   createdAt: string;
   expiresAt?: string;
-  court?: { id?: string; name?: string };
+  court?: { id?: string; name?: string; venue?: { id?: string; name?: string } };
   user?: { membership?: string; membershipStatus?: string };
   payment?: { status?: string } | null;
+  equipmentPackage?: string;
+  equipmentPrice?: number;
 };
 
 import React from "react";
 
+const loadSnapScript = (clientKey: string, isProduction: boolean): Promise<boolean> => {
+  return new Promise((resolve) => {
+    if (typeof window === "undefined") {
+      resolve(false);
+      return;
+    }
+    if ((window as any).snap) {
+      resolve(true);
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = isProduction
+      ? "https://app.midtrans.com/snap/snap.js"
+      : "https://app.sandbox.midtrans.com/snap/snap.js";
+    script.setAttribute("data-client-key", clientKey);
+    script.onload = () => resolve(true);
+    script.onerror = () => {
+      console.error("Failed to load Midtrans Snap script");
+      resolve(false);
+    };
+    document.body.appendChild(script);
+  });
+};
+
 const BookingRow = React.memo(({ 
   b, 
-  file, 
-  onFileChange, 
-  onUpload, 
-  isUploading, 
+  onPay, 
+  isPaying, 
   onReschedule,
   onShowDetail,
   onOpenMatch
 }: { 
   b: Booking, 
-  file: File | null, 
-  onFileChange: (f: File | null) => void, 
-  onUpload: () => void, 
-  isUploading: boolean,
+  onPay: (b: Booking) => void, 
+  isPaying: boolean,
   onReschedule: (b: Booking) => void,
   onShowDetail: (b: Booking) => void,
   onOpenMatch: (b: Booking) => void
@@ -96,14 +118,24 @@ const BookingRow = React.memo(({
                 </div>
               )}
             </div>
-            <h3 className="text-lg font-black text-white italic uppercase tracking-tight leading-tight">{b.court?.name}</h3>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] font-bold text-white/30 uppercase tracking-[0.2em] italic">
+            <h3 className="text-xl font-black text-white italic uppercase tracking-tight leading-tight">
+              {b.court?.venue?.name || "Padel Venue"} <span className="text-white/40 font-normal">·</span> {b.court?.name || "Court"}
+            </h3>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] font-bold text-white/40 uppercase tracking-[0.2em] italic">
+              <div className="flex items-center gap-1.5 text-white/70">
+                <MapPin size={10} className="text-neon/30" /> {b.court?.location || "Semarang"}
+              </div>
               <div className="flex items-center gap-1.5">
                 <CalendarDays size={10} className="text-neon/30" /> {String(b.date).slice(0, 10)}
               </div>
               <div className="flex items-center gap-1.5">
                 <Clock size={10} className="text-neon/30" /> {formatMinutesToHHmm(b.startTime)} – {formatMinutesToHHmm(b.endTime)}
               </div>
+              {b.equipmentPackage && b.equipmentPackage !== "NONE" && (
+                <div className="flex items-center gap-1 bg-neon/10 border border-neon/20 px-2 py-0.5 rounded text-[8px] font-black text-neon uppercase tracking-wider italic">
+                  <span>⚙️</span> {b.equipmentPackage === "STARTER" ? "Starter Gear" : "Group Gear"}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -172,9 +204,13 @@ const BookingRow = React.memo(({
                   Details
                </button>
             )}
-            {b.status === "PENDING" && !b.payment && (
-               <button className="col-span-2 md:col-span-1 h-10 px-4 bg-neon text-black text-[9px] font-black uppercase tracking-widest rounded-xl hover:scale-[1.02] transition-all flex items-center justify-center w-full">
-                  Pay Now
+            {b.status === "PENDING" && (
+               <button 
+                  onClick={(e) => { e.stopPropagation(); onPay(b); }}
+                  disabled={isPaying}
+                  className="col-span-2 md:col-span-1 h-10 px-4 bg-neon text-black text-[9px] font-black uppercase tracking-widest rounded-xl hover:scale-[1.02] transition-all flex items-center justify-center w-full disabled:opacity-55"
+               >
+                  {isPaying ? "Processing..." : "Pay Now"}
                </button>
             )}
             {(b.status === "CONFIRMED" || b.status === "RESCHEDULE_APPROVED") && canReschedule && (
@@ -189,8 +225,8 @@ const BookingRow = React.memo(({
         </div>
       </div>
 
-      {/* PENDING: payment deadline + file upload */}
-      {b.status === "PENDING" && !b.payment && (
+      {/* PENDING: payment deadline */}
+      {b.status === "PENDING" && (
         <div className="mt-4 pt-4 border-t border-white/5 space-y-3">
           {b.expiresAt && (
             <PaymentDeadlineCountdown
@@ -199,54 +235,6 @@ const BookingRow = React.memo(({
               onExpired={() => {}} 
             />
           )}
-          {!isExpiredByTime && (
-            <form 
-              onSubmit={(e) => {
-                e.preventDefault();
-                onUpload();
-              }}
-              className="grid md:grid-cols-[1fr_auto] gap-3 items-end"
-            >
-              <div className="relative group">
-                {file ? (
-                  <div className="flex items-center justify-between bg-neon/5 border border-neon/20 rounded-xl px-4 py-3">
-                    <div className="flex items-center gap-3 overflow-hidden">
-                      <span className="text-xl shrink-0">📄</span>
-                      <div className="min-w-0">
-                        <p className="text-[8px] font-black text-neon uppercase tracking-widest leading-none mb-1">Selected Proof</p>
-                        <p className="text-xs font-bold text-white truncate">{file.name}</p>
-                      </div>
-                    </div>
-                    <button 
-                      type="button"
-                      onClick={() => onFileChange(null)}
-                      className="ml-3 text-white/20 hover:text-red-400 text-[10px] font-black uppercase transition-colors"
-                    >
-                      Clear
-                    </button>
-                  </div>
-                ) : (
-                  <Input
-                    label="Upload Bukti Pembayaran (JPG/PNG, max 2MB)"
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => {
-                      const f = e.target.files?.[0] || null;
-                      onFileChange(f);
-                    }}
-                  />
-                )}
-              </div>
-              <Button
-                type="submit"
-                isLoading={isUploading}
-                disabled={!file}
-                className="h-12"
-              >
-                Submit Payment
-              </Button>
-            </form>
-          )}
         </div>
       )}
 
@@ -254,7 +242,7 @@ const BookingRow = React.memo(({
       {(b.status === "PERLU_VERIFIKASI" || b.payment?.status === "PENDING") && (
         <div className="mt-4 text-[10px] font-black text-amber-400 bg-amber-500/5 border border-amber-500/10 rounded-xl p-3 flex items-center gap-3 italic uppercase tracking-wider">
           <Clock size={12} className="animate-pulse" />
-          <span>Payment under review by admin.</span>
+          <span>Payment verification pending.</span>
         </div>
       )}
 
@@ -301,12 +289,14 @@ BookingRow.displayName = "BookingRow";
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { data: session, status } = useSession();
+  const { data: session, status, update } = useSession();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [fileByBookingId, setFileByBookingId] = useState<Record<string, File | null>>({});
-  const [uploadingBookingId, setUploadingBookingId] = useState<string | null>(null);
+  const [payingBookingId, setPayingBookingId] = useState<string | null>(null);
+  const [successModal, setSuccessModal] = useState<"booking" | "membership" | "pending" | "error" | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
+
+  const isOpeningPaymentRef = useRef(false);
   const [rescheduleBooking, setRescheduleBooking] = useState<Booking | null>(null);
   const [detailBooking, setDetailBooking] = useState<Booking | null>(null);
   const [hostedMatches, setHostedMatches] = useState<any[]>([]);
@@ -316,7 +306,146 @@ export default function DashboardPage() {
   const [isCancelMatchLoading, setIsCancelMatchLoading] = useState<string | null>(null);
 
   const canFetch = status === "authenticated";
-  const isInteracting = !!rescheduleBooking || !!detailBooking || !!uploadingBookingId || Object.values(fileByBookingId).some(f => !!f);
+  const isInteracting = !!rescheduleBooking || !!detailBooking || !!payingBookingId;
+
+  // Premium emotionally-aware Open Match status config generator
+  const getMatchStatusConfig = (m: any) => {
+    const lifecycle = getOpenMatchLifecycleState({
+      date: m.booking.date,
+      startTime: m.booking.startTime,
+      endTime: m.booking.endTime
+    });
+
+    // Calculate Semarang/Jakarta time (UTC+7)
+    const now = new Date();
+    const localNow = new Date(now.getTime() + 7 * 60 * 60 * 1000);
+    const bookingDateStr = new Date(m.booking.date).toISOString().split("T")[0];
+    const localTodayStr = localNow.toISOString().split("T")[0];
+    const nowMinutes = localNow.getUTCHours() * 60 + localNow.getUTCMinutes();
+
+    let minutesUntilStart = -1;
+    const isToday = bookingDateStr === localTodayStr;
+    if (isToday) {
+      minutesUntilStart = m.booking.startTime - nowMinutes;
+    }
+
+    const registeredCount = m.players.length;
+    const max = m.maxPlayers || 4;
+
+    if (lifecycle === "EXPIRED") {
+      return {
+        state: "FINISHED",
+        badgeText: "🏁 Match Finished",
+        badgeClass: "bg-white/5 border-white/10 text-white/45 font-black uppercase italic tracking-widest",
+        bgClass: "bg-white/[0.02] border-white/5",
+        title: "Match Completed",
+        description: "Thank you for building the local padel community.",
+        reassurance: "Your history is saved. Create a new Open Match anytime!",
+        iconColor: "text-white/20"
+      };
+    }
+
+    if (lifecycle === "LIVE") {
+      return {
+        state: "LIVE",
+        badgeText: "🔴 Match In Progress",
+        badgeClass: "bg-red-500/10 border-red-500/20 text-red-400 animate-pulse font-black uppercase italic tracking-widest",
+        bgClass: "bg-red-500/[0.02] border-red-500/10",
+        title: "Live Session Ongoing",
+        description: "Players are currently playing on the court. Have a great session!",
+        reassurance: "Your match is active and live. Bring your best energy!",
+        iconColor: "text-red-500"
+      };
+    }
+
+    // Lifecycle is UPCOMING
+    if (isToday && minutesUntilStart > 0 && minutesUntilStart <= 60) {
+      return {
+        state: "STARTING_SOON",
+        badgeText: "⏰ Match Starts Soon",
+        badgeClass: "bg-amber-500/10 border-amber-500/20 text-amber-400 animate-pulse font-black uppercase italic tracking-widest",
+        bgClass: "bg-amber-500/[0.02] border-amber-500/10",
+        title: `Starting in ${minutesUntilStart} mins`,
+        description: "Prepare your gear. Make sure all players are ready.",
+        reassurance: "Your session starts soon. Let's make it a legendary play!",
+        iconColor: "text-amber-400"
+      };
+    }
+
+    if (registeredCount >= max) {
+      return {
+        state: "FULL",
+        badgeText: "✅ Full Lobby Ready",
+        badgeClass: "bg-emerald-500/10 border-emerald-500/20 text-emerald-400 font-black uppercase italic tracking-widest",
+        bgClass: "bg-emerald-500/[0.02] border-emerald-500/10",
+        title: "Full Squad Locked In",
+        description: `${registeredCount}/${max} players confirmed. Your match is 100% ready.`,
+        reassurance: "Coordinate manual splits or contact your lobby players below.",
+        iconColor: "text-emerald-400"
+      };
+    }
+
+    if (registeredCount > 1) {
+      const isEvening = m.booking.startTime >= 17 * 60; // 5 PM or later
+      const supportMsg = isEvening
+        ? "Evening matches attract active players looking for post-work sessions!"
+        : "Prime booking hours tend to fill up rapidly as game time approaches.";
+
+      return {
+        state: "BUILDING",
+        badgeText: "🔥 Match Building Up",
+        badgeClass: "bg-orange-500/10 border-orange-500/20 text-orange-400 font-black uppercase italic tracking-widest",
+        bgClass: "bg-orange-500/[0.02] border-orange-500/10",
+        title: "Gaining Squad Traction",
+        description: `${registeredCount}/${max} players joined your session.`,
+        reassurance: supportMsg,
+        iconColor: "text-orange-400"
+      };
+    }
+
+    // RegisteredCount is 1 (only host)
+    const isPrimeTime = m.booking.startTime >= 16 * 60 && m.booking.startTime <= 21 * 60;
+    const confidenceMsg = isPrimeTime
+      ? "Prime evening matches usually attract players rapidly as booking hours approach!"
+      : "Most matches get filled closer to play time. Keep sharing with the community!";
+
+    return {
+      state: "LOOKING",
+      badgeText: "⚠ Looking for Players",
+      badgeClass: "bg-neon/10 border-neon/20 text-neon font-black uppercase italic tracking-widest",
+      bgClass: "bg-neon/[0.01] border-neon/5",
+      title: "Discoverable to Players",
+      description: "Your open match is now active and visible to nearby players.",
+      reassurance: confidenceMsg,
+      iconColor: "text-neon"
+    };
+  };
+
+  // Smart share match utility
+  const shareMatch = (m: any) => {
+    const dateStr = String(m.booking.date).slice(0, 10);
+    const timeStr = `${formatMinutesToHHmm(m.booking.startTime)} - ${formatMinutesToHHmm(m.booking.endTime)}`;
+    const venueCourt = `${m.booking.court.venue?.name || "PadelGO"} - ${m.booking.court.name}`;
+    const slotsLeft = m.maxPlayers - m.players.length;
+
+    const text = `🎾 *PADEL OPEN MATCH — PADELGO* 🎾\nJoin my session for dynamic rallies!\n\n📍 Court: ${venueCourt}\n📅 Date: ${dateStr}\n🕒 Time: ${timeStr}\n👥 Players: ${m.players.length}/${m.maxPlayers} (${slotsLeft > 0 ? `${slotsLeft} slot${slotsLeft > 1 ? 's' : ''} left!` : 'Full House!'})\n\nJoin the lobby now:\n${window.location.origin}/open-match/${m.id}\n\nLet's play! 🔥`;
+
+    if (typeof navigator !== "undefined" && navigator.share) {
+      navigator.share({
+        title: `Padel Open Match at ${venueCourt}`,
+        text: text,
+        url: `${window.location.origin}/open-match/${m.id}`
+      }).catch(() => {
+        navigator.clipboard.writeText(text);
+        setToast({ msg: "Match link and details copied! Share on WhatsApp.", type: "success" });
+      });
+    } else if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(text);
+      setToast({ msg: "Match link and details copied! Share on WhatsApp.", type: "success" });
+    } else {
+      setToast({ msg: "Sharing is not supported on this browser.", type: "error" });
+    }
+  };
 
   // Redirect ADMIN to /admin
   useEffect(() => {
@@ -344,11 +473,14 @@ export default function DashboardPage() {
     }
   };
 
-  const refresh = async (manageLifecycle = false, silent = false) => {
+  const refresh = async (manageLifecycle = false, silent = false, forceSessionUpdate = false) => {
     if (!silent) setIsLoading(true);
     try {
       if (manageLifecycle) {
         await fetch("/api/bookings/expire", { method: "POST" });
+      }
+      if (forceSessionUpdate && update) {
+        await update();
       }
       const data = await fetchJson<Booking[]>("/api/bookings");
       setBookings(Array.isArray(data) ? data : []);
@@ -374,13 +506,18 @@ export default function DashboardPage() {
     }
   };
 
+  const userId = session?.user?.id;
   useEffect(() => {
-    if (!canFetch) return;
-    refresh(true); // Manage lifecycle on initial load
+    if (userId) {
+      refresh(true, false, false);
+    }
+  }, [userId]);
+
+  // Silent auto-polling every 30 seconds
+  useEffect(() => {
+    if (!session) return;
     const interval = setInterval(() => {
-      if (!isInteracting && !isLoading) {
-        refresh(false, true); // Silent refresh in background
-      }
+      refresh(false, true);
     }, 30000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -395,55 +532,81 @@ export default function DashboardPage() {
     [bookings],
   );
 
-  const submitProof = async (bookingId: string) => {
-    const file = fileByBookingId[bookingId];
-    if (!file) {
-      setToast({ msg: "Mohon pilih file gambar bukti pembayaran.", type: "error" });
-      return;
-    }
-    if (!file.type.startsWith("image/")) {
-      setToast({ msg: "File harus berupa gambar (JPG, PNG, WebP).", type: "error" });
-      return;
-    }
-    if (file.size > 2 * 1024 * 1024) {
-      setToast({ msg: "Ukuran file maksimal 2MB.", type: "error" });
-      return;
-    }
-
-    setUploadingBookingId(bookingId);
+  const handlePay = async (booking: Booking) => {
+    if (payingBookingId) return;
+    if (isOpeningPaymentRef.current) return;
+    isOpeningPaymentRef.current = true;
+    setPayingBookingId(booking.id);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("bookingId", bookingId);
-
-      const uploadResponse = await fetch("/api/upload-proof", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!uploadResponse.ok) {
-        const errorData = await uploadResponse.json();
-        if (uploadResponse.status === 410) {
-          setToast({
-            msg: errorData.error || "Waktu pembayaran telah habis. Silakan lakukan booking baru.",
-            type: "error",
-          });
-          await refresh();
-        } else {
-          throw new Error(errorData.error || "Gagal mengunggah file.");
-        }
-        return;
+      const res = await fetch(`/api/bookings/${booking.id}/payment-token`);
+      const result = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(result.error || "Gagal mendapatkan token pembayaran.");
       }
-
-      setToast({ msg: "Bukti pembayaran terkirim. Menunggu verifikasi admin.", type: "success" });
-      setFileByBookingId((prev) => ({ ...prev, [bookingId]: null }));
-      await refresh(false, true); // Silent refresh to update status
-    } catch (e: unknown) {
-      setToast({ msg: getErrorMessage(e) || "Terjadi kesalahan", type: "error" });
+      
+      const loaded = await loadSnapScript(result.clientKey, result.isProduction);
+      const snap = (window as any).snap;
+      
+      if (loaded && snap) {
+        snap.pay(result.token, {
+          onSuccess: () => {
+            isOpeningPaymentRef.current = false;
+            setToast({ msg: "Pembayaran berhasil!", type: "success" });
+            refresh(false, true);
+            setSuccessModal("booking");
+          },
+          onPending: () => {
+            isOpeningPaymentRef.current = false;
+            setToast({ msg: "Pembayaran sedang diproses.", type: "success" });
+            refresh(false, true);
+            setSuccessModal("pending");
+          },
+          onError: () => {
+            isOpeningPaymentRef.current = false;
+            setToast({ msg: "Pembayaran gagal.", type: "error" });
+            refresh(false, true);
+            setSuccessModal("error");
+          },
+          onClose: () => {
+            isOpeningPaymentRef.current = false;
+            refresh(false, true);
+          }
+        });
+      } else {
+        throw new Error("Gagal memuat Snap script.");
+      }
+    } catch (err: any) {
+      isOpeningPaymentRef.current = false;
+      setToast({ msg: err.message, type: "error" });
     } finally {
-      setUploadingBookingId(null);
+      setPayingBookingId(null);
     }
   };
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const payment = params.get("payment");
+      const membership = params.get("membership");
+      if (payment === "success") {
+        setSuccessModal("booking");
+        window.history.replaceState({}, document.title, window.location.pathname);
+      } else if (membership === "success") {
+        setSuccessModal("membership");
+        if (update) {
+          update();
+        }
+        window.history.replaceState({}, document.title, window.location.pathname);
+      } else if (payment === "pending") {
+        setSuccessModal("pending");
+        window.history.replaceState({}, document.title, window.location.pathname);
+      } else if (payment === "error") {
+        setSuccessModal("error");
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    }
+  }, [update]);
 
   if (status === "unauthenticated") {
     return (
@@ -488,7 +651,7 @@ export default function DashboardPage() {
             </p>
           </div>
           <div className="flex items-center gap-3 w-full md:w-auto">
-            <Button variant="outline" onClick={refresh} isLoading={isLoading} className="flex-1 md:flex-none h-11 border-white/10 hover:bg-white/5 rounded-xl text-[9px] font-black uppercase tracking-[0.3em] px-6">
+            <Button variant="outline" onClick={() => refresh(false, false, true)} isLoading={isLoading} className="flex-1 md:flex-none h-11 border-white/10 hover:bg-white/5 rounded-xl text-[9px] font-black uppercase tracking-[0.3em] px-6">
               Refresh
             </Button>
           </div>
@@ -592,10 +755,8 @@ export default function DashboardPage() {
                   <BookingRow
                     key={b.id}
                     b={b}
-                    file={fileByBookingId[b.id] || null}
-                    onFileChange={(f) => setFileByBookingId(prev => ({ ...prev, [b.id]: f }))}
-                    onUpload={() => submitProof(b.id)}
-                    isUploading={uploadingBookingId === b.id}
+                    onPay={handlePay}
+                    isPaying={payingBookingId === b.id}
                     onReschedule={setRescheduleBooking}
                     onShowDetail={setDetailBooking}
                     onOpenMatch={setOpenMatchBooking}
@@ -605,133 +766,467 @@ export default function DashboardPage() {
             )
           ) : activeTab === "hosted" ? (
             hostedMatches.filter(m => m.status !== "CANCELED").length === 0 ? (
-              <div className="bg-[#0F0F0F]/50 rounded-[2rem] border border-white/5 p-16 text-center">
-                <p className="text-white/40 font-bold text-lg">No hosted matches active.</p>
-                <p className="text-white/20 text-xs mt-1 italic font-semibold">Confirm a booking slot and open it to find players!</p>
+              <div className="bg-[#0F0F0F]/50 rounded-[2rem] border border-white/5 p-16 text-center flex flex-col items-center justify-center max-w-xl mx-auto space-y-5 backdrop-blur-sm relative overflow-hidden">
+                {/* Glowing neon green accent backdrop */}
+                <div className="absolute -top-24 -right-24 w-48 h-48 bg-neon/5 blur-[60px] rounded-full pointer-events-none -z-10"></div>
+                <div className="w-16 h-16 rounded-full bg-white/5 border border-white/5 flex items-center justify-center text-3xl shadow-inner select-none">
+                  👑
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-xl font-black text-white italic uppercase tracking-tight">
+                    No hosted matches active
+                  </h3>
+                  <p className="text-white/40 text-xs font-semibold leading-relaxed italic max-w-sm">
+                    Confirm a booking slot from your active bookings and publish it to find community players!
+                  </p>
+                </div>
+                <div className="pt-2 w-full">
+                  <button 
+                    onClick={() => setActiveTab("bookings")}
+                    className="h-11 px-8 bg-white/5 hover:bg-white/10 border border-white/5 text-white/70 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2 mx-auto"
+                  >
+                    <span>📅</span> View Active Bookings
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="grid gap-6">
-                {hostedMatches.filter(m => m.status !== "CANCELED").map((m) => (
-                  <Card key={m.id} className="p-6 sm:p-8 !rounded-[2rem] border-white/5 shadow-xl bg-[#0F0F0F]/80">
-                    <div className="grid md:grid-cols-[1fr_auto] gap-6 items-center">
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-black uppercase tracking-widest bg-neon/10 text-neon px-2.5 py-1 rounded-md border border-neon/20 italic select-none">
-                            {m.matchType}
-                          </span>
-                          <span className="text-[10px] font-black uppercase tracking-widest bg-violet-500/10 text-violet-400 px-2.5 py-1 rounded-md border border-violet-500/20 italic select-none">
-                            {m.skillLevel}
-                          </span>
-                        </div>
-                        <h3 className="text-xl font-black text-white italic uppercase tracking-tight leading-tight">
-                          🎾 {m.title}
-                        </h3>
-                        <p className="text-white/40 text-xs font-semibold leading-relaxed max-w-xl">
-                          {m.description || "No match description provided."}
-                        </p>
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2 pt-2 text-[10px] font-bold text-white/30 uppercase tracking-[0.2em] italic">
-                          <div>📅 {String(m.booking.date).slice(0, 10)}</div>
-                          <div>🕒 {formatMinutesToHHmm(m.booking.startTime)} - {formatMinutesToHHmm(m.booking.endTime)}</div>
-                          <div className="col-span-2 md:col-span-1 truncate">📍 {m.booking.court.name}</div>
-                        </div>
-                      </div>
+                {hostedMatches.filter(m => m.status !== "CANCELED").map((m) => {
+                  const mConfig = getMatchStatusConfig(m);
+                  return (
+                    <Card key={m.id} className={`p-6 sm:p-8 !rounded-[2.5rem] border transition-all duration-300 ${mConfig.bgClass} shadow-2xl relative overflow-hidden group`}>
+                      {/* Subtle status glowing backdrop accent */}
+                      <div className="absolute top-0 right-0 w-64 h-64 bg-neon/5 blur-[80px] rounded-full pointer-events-none -z-10 group-hover:scale-110 transition-transform duration-500"></div>
 
-                      <div className="flex flex-col md:items-end gap-4 shrink-0">
-                        <div className="space-y-1 md:text-right">
-                          <p className="text-[8px] font-black text-white/10 uppercase tracking-[0.4em]">Players Registered</p>
-                          <p className="text-xl font-black text-neon italic">
-                            {m.players.length} / {m.maxPlayers}
-                          </p>
+                      <div className="flex flex-col gap-6">
+                        {/* 1. EMOTIONALLY-AWARE PREMIUM MATCH STATUS BANNER */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-white/5">
+                          <div className="flex items-center gap-3">
+                            <span className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg border ${mConfig.badgeClass}`}>
+                              {mConfig.badgeText}
+                            </span>
+                            <span className="text-[9px] font-black uppercase tracking-[0.2em] text-white/30 italic">
+                              Lobby ID: {m.id.slice(0, 8)}
+                            </span>
+                          </div>
+                          {mConfig.state !== "FINISHED" && mConfig.state !== "LIVE" && (
+                            <div className="text-[10px] font-black text-neon/80 uppercase italic tracking-wider bg-neon/5 border border-neon/10 rounded-lg px-2.5 py-1">
+                              🎾 Your match is active and live
+                            </div>
+                          )}
                         </div>
 
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => cancelMatch(m.id)}
-                            disabled={isCancelMatchLoading === m.id}
-                            className="h-8 px-4 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-[9px] font-black text-red-400 uppercase tracking-widest rounded-lg transition-all"
-                          >
-                            {isCancelMatchLoading === m.id ? "Canceling..." : "Cancel Match"}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
+                        {/* 2. CORE SESSION INFO & MATCH DATA */}
+                        <div className="grid md:grid-cols-[1fr_auto] gap-8 items-start">
+                          <div className="space-y-4">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-[8px] font-black uppercase tracking-widest bg-white/5 text-white/60 px-2 py-1 rounded border border-white/10 italic select-none">
+                                {m.matchType}
+                              </span>
+                              <span className="text-[8px] font-black uppercase tracking-widest bg-violet-500/10 text-violet-400 px-2 py-1 rounded border border-violet-500/20 italic select-none">
+                                {m.skillLevel}
+                              </span>
+                              {/* Future Tag Placeholder */}
+                              <span className="text-[8px] font-black uppercase tracking-widest bg-white/[0.02] text-white/20 px-2 py-1 rounded border border-white/5 italic select-none" title="Future Release: Play for Leaderboard Points">
+                                🏆 Ranked Eligible
+                              </span>
+                            </div>
 
-                    {/* Players list display */}
-                    <div className="mt-4 pt-4 border-t border-white/5">
-                      <p className="text-[8px] font-black text-white/20 uppercase tracking-[0.4em] mb-2">Match Roster</p>
-                      <div className="flex flex-wrap gap-2">
-                        {m.players.map((p: any) => (
-                          <div key={p.id} className="flex items-center gap-1.5 bg-white/5 border border-white/5 rounded-full px-3 py-1 text-[10px] font-bold text-white/80">
-                            <span className="w-1.5 h-1.5 rounded-full bg-neon"></span>
-                            <span>{p.player.name}</span>
-                            {p.playerId === m.hostId && (
-                              <span className="text-[8px] font-black text-neon uppercase italic tracking-tighter ml-1 select-none">Host</span>
+                            <div>
+                              <h3 className="text-2xl sm:text-3xl font-black text-white italic uppercase tracking-tighter leading-none mb-2">
+                                {m.title}
+                              </h3>
+                              <p className="text-white/50 text-xs font-semibold leading-relaxed max-w-2xl italic">
+                                "{m.description || "Join our community open padel session. All skill levels welcome for active rallies!"}"
+                              </p>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 pt-2 text-[10px] font-bold text-white/40 uppercase tracking-[0.25em] italic">
+                              <div className="flex items-center gap-1.5 text-white/80">
+                                <CalendarDays size={12} className="text-neon/50" /> {String(m.booking.date).slice(0, 10)}
+                              </div>
+                              <div className="flex items-center gap-1.5 text-white/80">
+                                <Clock size={12} className="text-neon/50" /> {formatMinutesToHHmm(m.booking.startTime)} - {formatMinutesToHHmm(m.booking.endTime)}
+                              </div>
+                              <div className="flex items-center gap-1.5 text-white/80 truncate">
+                                <MapPin size={12} className="text-neon/50" /> {m.booking.court.name}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* 3. PREMIUM PROGRESS VISUALIZATION */}
+                          <div className="flex flex-col md:items-end gap-3 bg-white/[0.02] border border-white/5 p-5 rounded-[1.8rem] w-full md:w-64">
+                            <div className="flex justify-between items-center w-full">
+                              <span className="text-[8px] font-black text-white/30 uppercase tracking-[0.3em]">Lobby Squad</span>
+                              <span className="text-xs font-black text-neon italic">
+                                {m.players.length} / {m.maxPlayers} Players
+                              </span>
+                            </div>
+
+                            {/* Sporty glowing progress dots */}
+                            <div className="flex items-center gap-2.5 my-2">
+                              {Array.from({ length: m.maxPlayers }).map((_, i) => {
+                                const isJoined = i < m.players.length;
+                                return (
+                                  <span
+                                    key={i}
+                                    className={`w-4 h-4 rounded-full border-2 transition-all duration-500 ${
+                                      isJoined
+                                        ? "bg-neon border-neon shadow-[0_0_12px_rgba(215,255,63,0.6)] scale-110"
+                                        : "bg-white/5 border-white/10"
+                                    }`}
+                                  />
+                                );
+                              })}
+                            </div>
+
+                            <p className="text-[9px] font-black text-white/40 uppercase tracking-[0.1em] text-center w-full">
+                              {m.players.length === m.maxPlayers ? "✨ FULL HOUSE" : `${m.maxPlayers - m.players.length} SLOTS REMAINING`}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* 4. SMART SUPPORTIVE MICROCOPY BLOCK */}
+                        <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4 flex items-start gap-3">
+                          <span className="text-lg">💡</span>
+                          <div>
+                            <p className="text-[9px] font-black text-white/30 uppercase tracking-widest leading-none mb-1">Host Reassurance</p>
+                            <p className="text-xs font-semibold text-white/70 italic leading-relaxed">
+                              {mConfig.reassurance}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* 5. ACTIVE PLAYER ROSTER WITH FUTURE PLACEHOLDERS */}
+                        <div className="pt-4 border-t border-white/5">
+                          <div className="flex justify-between items-center mb-3">
+                            <p className="text-[8px] font-black text-white/20 uppercase tracking-[0.4em]">Current Lobby Roster</p>
+                            <span className="text-[8px] font-black text-white/30 uppercase tracking-[0.15em] italic select-none">
+                              ⭐ Tap player to view stats
+                            </span>
+                          </div>
+                          
+                          <div className="grid sm:grid-cols-2 gap-3">
+                            {m.players.map((p: any) => {
+                              const isHost = p.playerId === m.hostId;
+                              return (
+                                <div key={p.id} className="flex items-center justify-between bg-white/[0.03] border border-white/5 rounded-2xl px-4 py-3 group/roster hover:border-white/10 transition-colors">
+                                  <div className="flex items-center gap-3">
+                                    {/* Styled Avatar Initial */}
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-black ${
+                                      isHost ? "bg-neon text-black" : "bg-white/10 text-white/70"
+                                    }`}>
+                                      {String(p.player.name || "P").slice(0, 2).toUpperCase()}
+                                    </div>
+                                    <div>
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="text-xs font-bold text-white">{p.player.name}</span>
+                                        {isHost && (
+                                          <span className="text-[7px] font-black text-neon uppercase italic tracking-widest bg-neon/10 px-1.5 py-0.5 rounded border border-neon/20 select-none">
+                                            Host
+                                          </span>
+                                        )}
+                                        {/* Future Verified Badge Placeholder */}
+                                        {!isHost && (
+                                          <CheckCircle2 size={10} className="text-sky-400 opacity-60" title="Future Release: Verified Skill Player" />
+                                        )}
+                                      </div>
+                                      {/* Future Rating & Tags Placeholders */}
+                                      <div className="flex items-center gap-2 mt-0.5 text-[8px] font-bold text-white/30 uppercase tracking-tighter">
+                                        <span className="flex items-center gap-0.5">
+                                          <Star size={8} className="text-amber-400 fill-amber-400" /> 4.8 Rating
+                                        </span>
+                                        <span>•</span>
+                                        <span className="text-white/40">Intermediate</span>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Future Favorite Teammate Placeholder */}
+                                  <button 
+                                    className="text-white/15 hover:text-red-400 hover:scale-110 active:scale-95 transition-all"
+                                    title="Future Release: Add as Favorite Teammate"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setToast({ msg: "Future feature: Teammate added to your favorites list!", type: "success" });
+                                    }}
+                                  >
+                                    <Heart size={12} className="fill-current" />
+                                  </button>
+                                </div>
+                              );
+                            })}
+
+                            {/* Future Slot Invite Trigger Placeholder */}
+                            {m.players.length < m.maxPlayers && (
+                              <div 
+                                onClick={() => shareMatch(m)}
+                                className="flex items-center justify-center border border-dashed border-white/10 rounded-2xl p-4 bg-white/[0.01] hover:bg-white/[0.02] cursor-pointer group/invite transition-all"
+                              >
+                                <button 
+                                  className="flex items-center gap-2 text-[9px] font-black uppercase text-white/30 group-hover/invite:text-neon transition-colors tracking-widest"
+                                >
+                                  <PlusCircle size={14} className="text-white/20 group-hover/invite:text-neon transition-colors" />
+                                  Invite Teammate
+                                </button>
+                              </div>
                             )}
                           </div>
-                        ))}
+                        </div>
+
+                        {/* 6. HOST ACTION BUTTONS */}
+                        <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-white/5">
+                          <div className="flex items-center gap-2 w-full sm:w-auto">
+                            {/* proper Share Match UX button */}
+                            <button
+                              onClick={() => shareMatch(m)}
+                              className="flex-1 sm:flex-none h-11 px-5 bg-neon hover:bg-neon/90 text-black text-[9px] font-black uppercase tracking-widest rounded-xl transition-all hover:scale-[1.02] active:scale-95 shadow-[0_0_15px_rgba(215,255,63,0.15)] flex items-center justify-center gap-1.5"
+                            >
+                              <Share2 size={12} /> Share Match
+                            </button>
+                            
+                            {/* Future Invite Trigger Placeholder button */}
+                            <button
+                              onClick={() => {
+                                setToast({ msg: "Future feature: Directly invite players from your favorite list!", type: "success" });
+                              }}
+                              className="flex-1 sm:flex-none h-11 px-5 bg-white/5 hover:bg-white/10 border border-white/5 text-white/60 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-1.5"
+                            >
+                              <Users size={12} /> Invite Group
+                            </button>
+                          </div>
+
+                          <div className="w-full sm:w-auto">
+                            <button
+                              onClick={() => cancelMatch(m.id)}
+                              disabled={isCancelMatchLoading === m.id}
+                              className="w-full sm:w-auto h-11 px-5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-[9px] font-black text-red-400 uppercase tracking-widest rounded-xl transition-all"
+                            >
+                              {isCancelMatchLoading === m.id ? "Canceling..." : "Cancel Match Room"}
+                            </button>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </Card>
-                ))}
+                    </Card>
+                  );
+                })}
               </div>
             )
           ) : activeTab === "joined" ? (
             joinedMatches.filter(m => m.status !== "CANCELED").length === 0 ? (
-              <div className="bg-[#0F0F0F]/50 rounded-[2rem] border border-white/5 p-16 text-center">
-                <p className="text-white/40 font-bold text-lg">No joined matches yet.</p>
-                <Link href="/booking">
-                  <Button className="mt-4">Find Matches</Button>
-                </Link>
+              <div className="bg-[#0F0F0F]/50 rounded-[2rem] border border-white/5 p-16 text-center flex flex-col items-center justify-center max-w-xl mx-auto space-y-5 backdrop-blur-sm relative overflow-hidden">
+                {/* Glowing neon green accent backdrop */}
+                <div className="absolute -top-24 -left-24 w-48 h-48 bg-neon/5 blur-[60px] rounded-full pointer-events-none -z-10"></div>
+                <div className="w-16 h-16 rounded-full bg-white/5 border border-white/5 flex items-center justify-center text-3xl shadow-inner select-none animate-bounce duration-[2000ms]">
+                  🎾
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-xl font-black text-white italic uppercase tracking-tight">
+                    No joined matches yet
+                  </h3>
+                  <p className="text-white/40 text-xs font-semibold leading-relaxed italic max-w-sm">
+                    Explore active community matches and join other players near you.
+                  </p>
+                </div>
+                <div className="pt-2 w-full">
+                  <Link href="/booking?tab=open-match">
+                    <button className="h-11 px-8 bg-neon hover:bg-neon/90 text-black text-[9px] font-black uppercase tracking-widest rounded-xl transition-all hover:scale-[1.02] active:scale-95 shadow-[0_0_15px_rgba(215,255,63,0.15)] flex items-center justify-center gap-2 mx-auto">
+                      <span>🎾</span> Explore Open Matches
+                    </button>
+                  </Link>
+                </div>
               </div>
             ) : (
               <div className="grid gap-6">
-                {joinedMatches.filter(m => m.status !== "CANCELED").map((m) => (
-                  <Card key={m.id} className="p-6 sm:p-8 !rounded-[2rem] border-white/5 shadow-xl bg-[#0F0F0F]/80">
-                    <div className="grid md:grid-cols-[1fr_auto] gap-6 items-center">
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-black uppercase tracking-widest bg-neon/10 text-neon px-2.5 py-1 rounded-md border border-neon/20 italic select-none">
-                            {m.matchType}
-                          </span>
-                          <span className="text-[10px] font-black uppercase tracking-widest bg-violet-500/10 text-violet-400 px-2.5 py-1 rounded-md border border-violet-500/20 italic select-none">
-                            {m.skillLevel}
-                          </span>
-                        </div>
-                        <h3 className="text-xl font-black text-white italic uppercase tracking-tight leading-tight">
-                          🎾 {m.title}
-                        </h3>
-                        <p className="text-white/40 text-xs font-semibold leading-relaxed max-w-xl">
-                          Host: <span className="text-white">{m.host.name}</span>
-                        </p>
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2 pt-1 text-[10px] font-bold text-white/30 uppercase tracking-[0.2em] italic">
-                          <div>📅 {String(m.booking.date).slice(0, 10)}</div>
-                          <div>🕒 {formatMinutesToHHmm(m.booking.startTime)} - {formatMinutesToHHmm(m.booking.endTime)}</div>
-                          <div className="col-span-2 md:col-span-1 truncate">📍 {m.booking.court.name}</div>
-                        </div>
-                      </div>
+                {joinedMatches.filter(m => m.status !== "CANCELED").map((m) => {
+                  const mConfig = getMatchStatusConfig(m);
+                  return (
+                    <Card key={m.id} className={`p-6 sm:p-8 !rounded-[2.5rem] border transition-all duration-300 ${mConfig.bgClass} shadow-2xl relative overflow-hidden group`}>
+                      {/* Subtle status glowing backdrop accent */}
+                      <div className="absolute top-0 right-0 w-64 h-64 bg-neon/5 blur-[80px] rounded-full pointer-events-none -z-10 group-hover:scale-110 transition-transform duration-500"></div>
 
-                      <div className="flex flex-col md:items-end gap-4 shrink-0">
-                        <div className="space-y-1 md:text-right">
-                          <p className="text-[8px] font-black text-white/10 uppercase tracking-[0.4em]">Players Registered</p>
-                          <p className="text-xl font-black text-neon italic">
-                            {m.players.length} / {m.maxPlayers}
-                          </p>
+                      <div className="flex flex-col gap-6">
+                        {/* 1. EMOTIONALLY-AWARE PREMIUM MATCH STATUS BANNER */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-white/5">
+                          <div className="flex items-center gap-3">
+                            <span className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg border ${mConfig.badgeClass}`}>
+                              {mConfig.badgeText}
+                            </span>
+                            <span className="text-[9px] font-black uppercase tracking-[0.2em] text-white/30 italic">
+                              Lobby ID: {m.id.slice(0, 8)}
+                            </span>
+                          </div>
+                          <div className="text-[10px] font-black text-white/40 uppercase italic tracking-wider">
+                            Host: <span className="text-white">{m.host.name}</span>
+                          </div>
                         </div>
 
-                        <div className="flex gap-2">
-                          <a
-                            href={`https://wa.me/${m.host.whatsapp.replace(/\D/g, "")}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="h-8 px-4 bg-neon hover:bg-neon/90 text-black text-[9px] font-black uppercase tracking-widest rounded-lg transition-all flex items-center justify-center shadow-[0_0_10px_rgba(215,255,63,0.15)] gap-1"
-                          >
-                            <span>📱</span> Contact Host
-                          </a>
+                        {/* 2. CORE SESSION INFO & MATCH DATA */}
+                        <div className="grid md:grid-cols-[1fr_auto] gap-8 items-start">
+                          <div className="space-y-4">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-[8px] font-black uppercase tracking-widest bg-white/5 text-white/60 px-2 py-1 rounded border border-white/10 italic select-none">
+                                {m.matchType}
+                              </span>
+                              <span className="text-[8px] font-black uppercase tracking-widest bg-violet-500/10 text-violet-400 px-2 py-1 rounded border border-violet-500/20 italic select-none">
+                                {m.skillLevel}
+                              </span>
+                              {/* Future Tag Placeholder */}
+                              <span className="text-[8px] font-black uppercase tracking-widest bg-white/[0.02] text-white/20 px-2 py-1 rounded border border-white/5 italic select-none">
+                                🏆 Ranked Eligible
+                              </span>
+                            </div>
+
+                            <div>
+                              <h3 className="text-2xl sm:text-3xl font-black text-white italic uppercase tracking-tighter leading-none mb-2">
+                                {m.title}
+                              </h3>
+                              <p className="text-white/50 text-xs font-semibold leading-relaxed max-w-2xl italic">
+                                "{m.description || "Join our community open padel session. All skill levels welcome for active rallies!"}"
+                              </p>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 pt-2 text-[10px] font-bold text-white/40 uppercase tracking-[0.25em] italic">
+                              <div className="flex items-center gap-1.5 text-white/80">
+                                <CalendarDays size={12} className="text-neon/50" /> {String(m.booking.date).slice(0, 10)}
+                              </div>
+                              <div className="flex items-center gap-1.5 text-white/80">
+                                <Clock size={12} className="text-neon/50" /> {formatMinutesToHHmm(m.booking.startTime)} - {formatMinutesToHHmm(m.booking.endTime)}
+                              </div>
+                              <div className="flex items-center gap-1.5 text-white/80 truncate">
+                                <MapPin size={12} className="text-neon/50" /> {m.booking.court.name}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* 3. PREMIUM PROGRESS VISUALIZATION */}
+                          <div className="flex flex-col md:items-end gap-3 bg-white/[0.02] border border-white/5 p-5 rounded-[1.8rem] w-full md:w-64">
+                            <div className="flex justify-between items-center w-full">
+                              <span className="text-[8px] font-black text-white/30 uppercase tracking-[0.3em]">Lobby Squad</span>
+                              <span className="text-xs font-black text-neon italic">
+                                {m.players.length} / {m.maxPlayers} Players
+                              </span>
+                            </div>
+
+                            {/* Sporty progress dots */}
+                            <div className="flex items-center gap-2.5 my-2">
+                              {Array.from({ length: m.maxPlayers }).map((_, i) => {
+                                const isJoined = i < m.players.length;
+                                return (
+                                  <span
+                                    key={i}
+                                    className={`w-4 h-4 rounded-full border-2 transition-all duration-500 ${
+                                      isJoined
+                                        ? "bg-neon border-neon shadow-[0_0_12px_rgba(215,255,63,0.6)] scale-110"
+                                        : "bg-white/5 border-white/10"
+                                    }`}
+                                  />
+                                );
+                              })}
+                            </div>
+
+                            <p className="text-[9px] font-black text-white/40 uppercase tracking-[0.1em] text-center w-full">
+                              {m.players.length === m.maxPlayers ? "✨ FULL HOUSE" : `${m.maxPlayers - m.players.length} SLOTS OPEN`}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* 4. REASSURING PARTICIPANT SMART NOTE */}
+                        <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4 flex items-start gap-3">
+                          <span className="text-lg">🤝</span>
+                          <div>
+                            <p className="text-[9px] font-black text-white/30 uppercase tracking-widest leading-none mb-1">Squad Gathering</p>
+                            <p className="text-xs font-semibold text-white/70 italic leading-relaxed">
+                              {m.players.length === m.maxPlayers 
+                                ? "Lobby is full! Get ready for an excellent match. Tap 'Contact Host' to align on strategies." 
+                                : "Help fill this lobby! Invite your friends or share this match. The host is ready to play."}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* 5. PLAYER ROSTER DISPLAY WITH FUTURE PLACEHOLDERS */}
+                        <div className="pt-4 border-t border-white/5">
+                          <p className="text-[8px] font-black text-white/20 uppercase tracking-[0.4em] mb-3">Lobby Roster</p>
+                          <div className="grid sm:grid-cols-2 gap-3">
+                            {m.players.map((p: any) => {
+                              const isHost = p.playerId === m.hostId;
+                              return (
+                                <div key={p.id} className="flex items-center justify-between bg-white/[0.03] border border-white/5 rounded-2xl px-4 py-3 group/roster hover:border-white/10 transition-colors">
+                                  <div className="flex items-center gap-3">
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-black ${
+                                      isHost ? "bg-neon text-black" : "bg-white/10 text-white/70"
+                                    }`}>
+                                      {String(p.player.name || "P").slice(0, 2).toUpperCase()}
+                                    </div>
+                                    <div>
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="text-xs font-bold text-white">{p.player.name}</span>
+                                        {isHost && (
+                                          <span className="text-[7px] font-black text-neon uppercase italic tracking-widest bg-neon/10 px-1.5 py-0.5 rounded border border-neon/20 select-none">
+                                            Host
+                                          </span>
+                                        )}
+                                        {!isHost && (
+                                          <CheckCircle2 size={10} className="text-sky-400 opacity-60" />
+                                        )}
+                                      </div>
+                                      <div className="flex items-center gap-2 mt-0.5 text-[8px] font-bold text-white/30 uppercase tracking-tighter">
+                                        <span className="flex items-center gap-0.5">
+                                          <Star size={8} className="text-amber-400 fill-amber-400" /> 4.7 Rating
+                                        </span>
+                                        <span>•</span>
+                                        <span className="text-white/40">Intermediate</span>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <button 
+                                    className="text-white/15 hover:text-red-400 hover:scale-110 active:scale-95 transition-all"
+                                    title="Future Release: Favorite Teammate"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setToast({ msg: "Future feature: Teammate added to favorites!", type: "success" });
+                                    }}
+                                  >
+                                    <Heart size={12} className="fill-current" />
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* 6. PARTICIPANT ACTION BUTTONS */}
+                        <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-white/5">
+                          <div className="flex items-center gap-2 w-full sm:w-auto">
+                            {/* Contact Host Button */}
+                            <a
+                              href={`https://wa.me/${m.host.whatsapp.replace(/\D/g, "")}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex-1 sm:flex-none h-11 px-6 bg-neon hover:bg-neon/90 text-black text-[9px] font-black uppercase tracking-widest rounded-xl transition-all hover:scale-[1.02] active:scale-95 shadow-[0_0_15px_rgba(215,255,63,0.15)] flex items-center justify-center gap-1.5"
+                            >
+                              <span>📱</span> Contact Host
+                            </a>
+
+                            {/* Share Match Button to let joined players help invite */}
+                            <button
+                              onClick={() => shareMatch(m)}
+                              className="flex-1 sm:flex-none h-11 px-6 bg-white/5 hover:bg-white/10 border border-white/5 text-white/60 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-1.5"
+                            >
+                              <Share2 size={12} /> Share Match
+                            </button>
+                          </div>
+
+                          {/* Future Invite Trigger Placeholder */}
+                          <div className="w-full sm:w-auto text-right text-[9px] font-black text-white/20 uppercase tracking-[0.2em] italic select-none">
+                            🔒 Secure PadelGO Matchmaking
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </Card>
-                ))}
+                    </Card>
+                  );
+                })}
               </div>
             )
           ) : null}
@@ -786,8 +1281,11 @@ export default function DashboardPage() {
 
               <div className="space-y-4 bg-white/5 p-6 rounded-3xl border border-white/10">
                 <div className="flex justify-between items-center border-b border-white/5 pb-3">
-                  <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">Court</span>
-                  <span className="text-sm font-black text-white">{detailBooking.court?.name}</span>
+                  <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">Venue / Court</span>
+                  <div className="text-right">
+                    <span className="text-sm font-black text-white block">{detailBooking.court?.venue?.name || "Padel Venue"}</span>
+                    <span className="text-xs font-bold text-white/60">{detailBooking.court?.name}</span>
+                  </div>
                 </div>
                 <div className="flex justify-between items-center border-b border-white/5 pb-3">
                   <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">Date</span>
@@ -799,6 +1297,19 @@ export default function DashboardPage() {
                     {formatMinutesToHHmm(detailBooking.startTime)} - {formatMinutesToHHmm(detailBooking.endTime)}
                   </span>
                 </div>
+                {detailBooking.equipmentPackage && detailBooking.equipmentPackage !== "NONE" && (
+                  <div className="flex justify-between items-center border-b border-white/5 pb-3 animate-fade-in">
+                    <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">Equipment</span>
+                    <div className="text-right">
+                      <span className="text-sm font-black text-neon block uppercase italic tracking-wider">
+                        {detailBooking.equipmentPackage === "STARTER" ? "Starter Package" : "Group Package"}
+                      </span>
+                      <span className="text-[9px] font-bold text-white/60">
+                        {detailBooking.equipmentPackage === "STARTER" ? "2 Rackets + 1 Ball Set" : "4 Rackets + 1 Ball Set"}
+                      </span>
+                    </div>
+                  </div>
+                )}
                 <div className="flex justify-between items-center pt-1">
                   <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">Status</span>
                   <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg border ${
@@ -836,6 +1347,57 @@ export default function DashboardPage() {
           />
         )}
       </AnimatePresence>
+
+      {/* Sporty Minimalist Success Modal */}
+      {successModal && (
+        <div 
+          className="fixed inset-0 z-[250] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in duration-300"
+          onClick={() => setSuccessModal(null)}
+        >
+          <div 
+            className="bg-[#0F0F0F] w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden border border-neon/20 p-8 space-y-6 text-center animate-in zoom-in-95 duration-300 relative"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-40 h-40 bg-neon/10 blur-[50px] rounded-full pointer-events-none -z-10"></div>
+            
+            <div className="flex flex-col items-center space-y-4">
+              {successModal === "booking" || successModal === "membership" ? (
+                <div className="w-16 h-16 rounded-full bg-neon/10 border border-neon/30 flex items-center justify-center text-neon shadow-[0_0_20px_rgba(215,255,63,0.2)]">
+                  <CheckCircle2 size={32} className="stroke-[2.5]" />
+                </div>
+              ) : successModal === "pending" ? (
+                <div className="w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.2)]">
+                  <Clock size={32} className="stroke-[2.5]" />
+                </div>
+              ) : (
+                <div className="w-16 h-16 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-500 shadow-[0_0_20px_rgba(239,68,68,0.2)]">
+                  <AlertCircle size={32} className="stroke-[2.5]" />
+                </div>
+              )}
+
+              <h2 className="text-3xl font-black text-white italic uppercase tracking-tight">
+                {successModal === "booking" && "Booking Confirmed!"}
+                {successModal === "membership" && "Welcome to Elite!"}
+                {successModal === "pending" && "Payment Pending"}
+                {successModal === "error" && "Payment Failed"}
+              </h2>
+              
+              <p className="text-white/60 text-sm italic font-medium leading-relaxed">
+                {successModal === "booking" && "Your court reservation has been fully secured. Get ready to hit the court!"}
+                {successModal === "membership" && "Your Elite Membership request has been processed. Your member privileges are now active!"}
+                {successModal === "pending" && "Your transaction is being processed. We will automatically update your status once completed."}
+                {successModal === "error" && "We could not complete your transaction. Please try again or contact support."}
+              </p>
+            </div>
+
+            <div className="pt-4">
+              <Button size="full" onClick={() => setSuccessModal(null)} className="h-12 text-[10px] font-black uppercase tracking-widest rounded-xl">
+                Awesome
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

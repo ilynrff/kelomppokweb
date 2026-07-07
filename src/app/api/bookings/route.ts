@@ -14,6 +14,7 @@ import {
 import { getErrorMessage } from "@/lib/errorMessage";
 import { validateBookingMonth } from "@/lib/dateValidation";
 import { createNotification } from "@/lib/notifications";
+import { getJakartaTime } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -189,10 +190,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Booking duration must be in full hours" }, { status: 400 });
     }
 
-    // Past time validation
-    const now = new Date();
-    const localDateStr = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().split('T')[0];
-    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    // Past time validation using Jakarta timezone
+    const { dateStr: localDateStr, nowMinutes, year: jYear, month: jMonth, day: jDay } = getJakartaTime();
     const bookingDateStr = bookingDate.toISOString().split('T')[0];
     
     if (bookingDateStr < localDateStr) {
@@ -203,9 +202,8 @@ export async function POST(req: Request) {
     }
 
     // Membership Priority Booking Rule
-    // Reset time to midnight for accurate day difference
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const target = new Date(bookingDate.getFullYear(), bookingDate.getMonth(), bookingDate.getDate());
+    const today = new Date(Date.UTC(jYear, jMonth - 1, jDay));
+    const target = new Date(Date.UTC(bookingDate.getUTCFullYear(), bookingDate.getUTCMonth(), bookingDate.getUTCDate()));
     const diffTime = target.getTime() - today.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     

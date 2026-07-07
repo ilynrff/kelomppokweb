@@ -5,6 +5,7 @@ import prisma from "@/lib/prisma";
 import { getErrorMessage } from "@/lib/errorMessage";
 import { coerceDateOnlyUTC, parseSlotToRange } from "@/lib/bookingTime";
 import { validateBookingMonth } from "@/lib/dateValidation";
+import { getJakartaTime } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -60,10 +61,8 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       return NextResponse.json({ error: "Sertakan timeSlot atau startTime dan endTime" }, { status: 400 });
     }
 
-    // Past time validation for reschedule
-    const now = new Date();
-    const localDateStr = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().split('T')[0];
-    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    // Past time validation for reschedule using Jakarta timezone
+    const { dateStr: localDateStr, nowMinutes } = getJakartaTime();
     const newDateStr = newDate.toISOString().split('T')[0];
     
     if (newDateStr < localDateStr) {
