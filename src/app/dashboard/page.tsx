@@ -21,6 +21,7 @@ import { MembershipStatusCard } from "@/components/profile/MembershipStatusCard"
 import { UpgradeInvitationCard } from "@/components/dashboard/UpgradeInvitationCard";
 import { Crown, Star, CalendarDays, Activity, ShieldCheck, Gem, Clock, AlertCircle, MapPin, Share2, Users, CheckCircle2, Flame, Award, Heart, PlusCircle, Trophy } from "lucide-react";
 import { CreateOpenMatchModal } from "@/components/dashboard/CreateOpenMatchModal";
+import { PlayersJoinedModal } from "@/components/dashboard/PlayersJoinedModal";
 import { AnimatePresence } from "framer-motion";
 
 type Booking = {
@@ -30,16 +31,16 @@ type Booking = {
   startTime: number;
   endTime: number;
   status:
-    | "PENDING"
-    | "CONFIRMED"
-    | "CANCELLED"
-    | "EXPIRED"
-    | "COMPLETED"
-    | "PERLU_VERIFIKASI"
-    | "RESCHEDULE_REQUESTED"
-    | "RESCHEDULE_APPROVED"
-    | "RESCHEDULE_REJECTED"
-    | string;
+  | "PENDING"
+  | "CONFIRMED"
+  | "CANCELLED"
+  | "EXPIRED"
+  | "COMPLETED"
+  | "PERLU_VERIFIKASI"
+  | "RESCHEDULE_REQUESTED"
+  | "RESCHEDULE_APPROVED"
+  | "RESCHEDULE_REJECTED"
+  | string;
   totalPrice: number;
   createdAt: string;
   expiresAt?: string;
@@ -76,16 +77,16 @@ const loadSnapScript = (clientKey: string, isProduction: boolean): Promise<boole
   });
 };
 
-const BookingRow = React.memo(({ 
-  b, 
-  onPay, 
-  isPaying, 
+const BookingRow = React.memo(({
+  b,
+  onPay,
+  isPaying,
   onReschedule,
   onShowDetail,
   onOpenMatch
-}: { 
-  b: Booking, 
-  onPay: (b: Booking) => void, 
+}: {
+  b: Booking,
+  onPay: (b: Booking) => void,
   isPaying: boolean,
   onReschedule: (b: Booking) => void,
   onShowDetail: (b: Booking) => void,
@@ -100,7 +101,7 @@ const BookingRow = React.memo(({
   const isClickable = b.status === "CONFIRMED" || b.status === "RESCHEDULE_APPROVED" || b.status === "CHECKED_IN";
 
   return (
-    <Card 
+    <Card
       className={`p-5 !rounded-[2rem] border-white/5 shadow-xl transition-all ${isClickable ? 'cursor-pointer hover:shadow-2xl hover:border-neon/30 hover:-translate-y-1 hover:bg-white/[0.04]' : ''}`}
       onClick={() => isClickable && onShowDetail(b)}
     >
@@ -148,23 +149,22 @@ const BookingRow = React.memo(({
               <div className="space-y-0.5">
                 <p className="text-[8px] font-black text-white/10 uppercase tracking-[0.4em]">Status</p>
                 <p className="text-[10px] font-bold text-white/40 uppercase italic">
-                  {b.payment?.status === "CONFIRMED" ? "Payment Confirmed" : 
-                   b.payment?.status === "PENDING" ? "Under Review" : 
-                   b.payment?.status === "FAILED" ? "Payment Failed" : 
-                   "Awaiting Payment"}
+                  {b.payment?.status === "CONFIRMED" ? "Payment Confirmed" :
+                    b.payment?.status === "PENDING" ? "Under Review" :
+                      b.payment?.status === "FAILED" ? "Payment Failed" :
+                        "Awaiting Payment"}
                 </p>
               </div>
-              <div className={`text-[8px] font-black uppercase tracking-[0.2em] px-3 py-1.5 rounded-lg border italic shrink-0 ${
-                b.status === "CONFIRMED" || b.status === "RESCHEDULE_APPROVED"
-                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                  : b.status === "EXPIRED" || b.status === "CANCELLED"
-                    ? "bg-red-500/10 text-red-400 border-red-500/20"
-                    : b.status === "PERLU_VERIFIKASI"
-                      ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
-                      : b.status === "RESCHEDULE_REQUESTED"
-                        ? "bg-violet-500/10 text-violet-400 border-violet-500/20"
-                        : "bg-white/5 text-white/20 border-white/10"
-              }`}>
+              <div className={`text-[8px] font-black uppercase tracking-[0.2em] px-3 py-1.5 rounded-lg border italic shrink-0 ${b.status === "CONFIRMED" || b.status === "RESCHEDULE_APPROVED"
+                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                : b.status === "EXPIRED" || b.status === "CANCELLED"
+                  ? "bg-red-500/10 text-red-400 border-red-500/20"
+                  : b.status === "PERLU_VERIFIKASI"
+                    ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                    : b.status === "RESCHEDULE_REQUESTED"
+                      ? "bg-violet-500/10 text-violet-400 border-violet-500/20"
+                      : "bg-white/5 text-white/20 border-white/10"
+                }`}>
                 {b.status === "PERLU_VERIFIKASI" ? "Verifying" : b.status}
               </div>
             </div>
@@ -186,7 +186,7 @@ const BookingRow = React.memo(({
               </div>
             ) : (
               (b.status === "CONFIRMED" || b.status === "RESCHEDULE_APPROVED" || b.status === "CHECKED_IN") && (
-                <button 
+                <button
                   onClick={(e) => { e.stopPropagation(); onOpenMatch(b); }}
                   className="h-10 px-4 bg-neon hover:bg-neon/90 text-black text-[9px] font-black uppercase tracking-widest rounded-xl transition-all hover:scale-[1.02] active:scale-95 shadow-[0_0_15px_rgba(215,255,63,0.15)] flex items-center justify-center gap-1.5 w-full md:w-auto"
                 >
@@ -195,31 +195,30 @@ const BookingRow = React.memo(({
               )
             )}
             {isClickable && (
-               <button 
-                  onClick={(e) => { e.stopPropagation(); onShowDetail(b); }}
-                  className={`h-10 px-4 bg-white/5 hover:bg-white/10 border border-white/5 text-[9px] font-black text-white/60 uppercase tracking-widest rounded-xl transition-all flex items-center justify-center w-full md:w-auto ${
-                    b.openMatch && b.openMatch.status !== "CANCELED" ? "col-span-2 md:col-span-1" : ""
+              <button
+                onClick={(e) => { e.stopPropagation(); onShowDetail(b); }}
+                className={`h-10 px-4 bg-white/5 hover:bg-white/10 border border-white/5 text-[9px] font-black text-white/60 uppercase tracking-widest rounded-xl transition-all flex items-center justify-center w-full md:w-auto ${b.openMatch && b.openMatch.status !== "CANCELED" ? "col-span-2 md:col-span-1" : ""
                   }`}
-               >
-                  Details
-               </button>
+              >
+                Details
+              </button>
             )}
             {b.status === "PENDING" && (
-               <button 
-                  onClick={(e) => { e.stopPropagation(); onPay(b); }}
-                  disabled={isPaying}
-                  className="col-span-2 md:col-span-1 h-10 px-4 bg-neon text-black text-[9px] font-black uppercase tracking-widest rounded-xl hover:scale-[1.02] transition-all flex items-center justify-center w-full disabled:opacity-55"
-               >
-                  {isPaying ? "Processing..." : "Pay Now"}
-               </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onPay(b); }}
+                disabled={isPaying}
+                className="col-span-2 md:col-span-1 h-10 px-4 bg-neon text-black text-[9px] font-black uppercase tracking-widest rounded-xl hover:scale-[1.02] transition-all flex items-center justify-center w-full disabled:opacity-55"
+              >
+                {isPaying ? "Processing..." : "Pay Now"}
+              </button>
             )}
             {(b.status === "CONFIRMED" || b.status === "RESCHEDULE_APPROVED") && canReschedule && (
-               <button 
-                  onClick={(e) => { e.stopPropagation(); onReschedule(b); }}
-                  className="col-span-2 md:col-span-1 h-10 px-4 bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/20 text-[9px] font-black text-violet-400 uppercase tracking-widest rounded-xl transition-all flex items-center justify-center w-full md:w-auto"
-               >
-                  Reschedule
-               </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onReschedule(b); }}
+                className="col-span-2 md:col-span-1 h-10 px-4 bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/20 text-[9px] font-black text-violet-400 uppercase tracking-widest rounded-xl transition-all flex items-center justify-center w-full md:w-auto"
+              >
+                Reschedule
+              </button>
             )}
           </div>
         </div>
@@ -232,7 +231,7 @@ const BookingRow = React.memo(({
             <PaymentDeadlineCountdown
               expiresAt={b.expiresAt}
               bookingStatus={b.status}
-              onExpired={() => {}} 
+              onExpired={() => { }}
             />
           )}
         </div>
@@ -254,7 +253,7 @@ const BookingRow = React.memo(({
       {/* CONFIRMED: reschedule button */}
       {(b.status === "CONFIRMED" || b.status === "RESCHEDULE_APPROVED") && (
         <div className="hidden">
-           {/* Reschedule handled by separate button in right side now */}
+          {/* Reschedule handled by separate button in right side now */}
         </div>
       )}
 
@@ -304,6 +303,7 @@ export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<"bookings" | "hosted" | "joined">("bookings");
   const [openMatchBooking, setOpenMatchBooking] = useState<Booking | null>(null);
   const [isCancelMatchLoading, setIsCancelMatchLoading] = useState<string | null>(null);
+  const [viewPlayersMatch, setViewPlayersMatch] = useState<any | null>(null);
 
   const canFetch = status === "authenticated";
   const isInteracting = !!rescheduleBooking || !!detailBooking || !!payingBookingId;
@@ -421,14 +421,50 @@ export default function DashboardPage() {
     };
   };
 
-  // Smart share match utility
-  const shareMatch = (m: any) => {
+  const getInvitationText = (m: any) => {
     const dateStr = String(m.booking.date).slice(0, 10);
     const timeStr = `${formatMinutesToHHmm(m.booking.startTime)} - ${formatMinutesToHHmm(m.booking.endTime)}`;
     const venueCourt = `${m.booking.court.venue?.name || "PadelGO"} - ${m.booking.court.name}`;
     const slotsLeft = m.maxPlayers - m.players.length;
 
-    const text = `🎾 *PADEL OPEN MATCH — PADELGO* 🎾\nJoin my session for dynamic rallies!\n\n📍 Court: ${venueCourt}\n📅 Date: ${dateStr}\n🕒 Time: ${timeStr}\n👥 Players: ${m.players.length}/${m.maxPlayers} (${slotsLeft > 0 ? `${slotsLeft} slot${slotsLeft > 1 ? 's' : ''} left!` : 'Full House!'})\n\nJoin the lobby now:\n${window.location.origin}/open-match/${m.id}\n\nLet's play! 🔥`;
+    return `*PADELGO — OPEN MATCH INVITATION*
+
+You're invited to join an exciting padel session.
+
+────────────────────────
+
+Venue
+${venueCourt}
+
+Date
+${dateStr}
+
+Time
+${timeStr}
+
+Players
+${m.players.length}/${m.maxPlayers}
+
+${slotsLeft > 0
+        ? `Only ${slotsLeft} spot${slotsLeft > 1 ? "s" : ""} remaining`
+        : `This match is already FULL`
+      }
+
+────────────────────────
+
+Reserve your spot:
+${window.location.origin}/open-match/${m.id}
+
+See you on the court.
+
+*PADELGO*
+_Play Smarter. Book Faster._`;
+  };
+
+  // Smart share match utility
+  const shareMatch = (m: any) => {
+    const text = getInvitationText(m);
+    const venueCourt = `${m.booking.court.venue?.name || "PadelGO"} - ${m.booking.court.name}`;
 
     if (typeof navigator !== "undefined" && navigator.share) {
       navigator.share({
@@ -540,14 +576,14 @@ export default function DashboardPage() {
     try {
       const res = await fetch(`/api/bookings/${booking.id}/payment-token`);
       const result = await res.json();
-      
+
       if (!res.ok) {
         throw new Error(result.error || "Gagal mendapatkan token pembayaran.");
       }
-      
+
       const loaded = await loadSnapScript(result.clientKey, result.isProduction);
       const snap = (window as any).snap;
-      
+
       if (loaded && snap) {
         snap.pay(result.token, {
           onSuccess: () => {
@@ -628,7 +664,7 @@ export default function DashboardPage() {
   return (
     <div className="flex-1 bg-[#050505] p-6 md:p-10 min-h-[calc(100vh-64px)] relative overflow-hidden pt-32 md:pt-40">
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[800px] bg-neon/5 blur-[150px] rounded-full pointer-events-none -z-10"></div>
-      
+
       {toast && (
         <Toast
           isOpen={true}
@@ -662,7 +698,7 @@ export default function DashboardPage() {
           {(session?.user as any)?.membershipStatus === "FREE" ? (
             <UpgradeInvitationCard />
           ) : (
-            <MembershipStatusCard 
+            <MembershipStatusCard
               status={(session?.user as any)?.membershipStatus}
               type={(session?.user as any)?.membership}
               expiresAt={(session?.user as any)?.membershipExpiresAt}
@@ -672,24 +708,24 @@ export default function DashboardPage() {
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 animate-fade-in-up delay-200">
-          <StatCard 
+          <StatCard
             icon={<CalendarDays size={16} className="text-white/20" />}
             label="Total Bookings"
             value={bookings.length}
           />
-          <StatCard 
+          <StatCard
             icon={<Activity size={16} className="text-orange-400/20" />}
             label="Pending"
             value={pending}
             color="orange"
           />
-          <StatCard 
+          <StatCard
             icon={<ShieldCheck size={16} className="text-emerald-400/20" />}
             label="Confirmed"
             value={confirmed}
             color="emerald"
           />
-          <StatCard 
+          <StatCard
             icon={<Gem size={16} className="text-white/20" />}
             label="Identity"
             value={(session?.user as any)?.membership || "BASIC"}
@@ -702,33 +738,30 @@ export default function DashboardPage() {
           <div className="grid grid-cols-3 md:flex md:flex-row gap-1">
             <button
               onClick={() => setActiveTab("bookings")}
-              className={`py-3 md:px-5 md:py-2.5 rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-wider transition-all duration-300 flex flex-col md:flex-row items-center justify-center gap-1 md:gap-1.5 ${
-                activeTab === "bookings"
-                  ? "bg-white/5 text-neon border border-neon/20 shadow-[0_0_15px_rgba(215,255,63,0.05)]"
-                  : "text-white/40 hover:text-white border border-transparent"
-              }`}
+              className={`py-3 md:px-5 md:py-2.5 rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-wider transition-all duration-300 flex flex-col md:flex-row items-center justify-center gap-1 md:gap-1.5 ${activeTab === "bookings"
+                ? "bg-white/5 text-neon border border-neon/20 shadow-[0_0_15px_rgba(215,255,63,0.05)]"
+                : "text-white/40 hover:text-white border border-transparent"
+                }`}
             >
               <span className="text-[12px] md:text-sm">📅</span>
               <span className="text-center truncate w-full md:w-auto">Bookings ({bookings.length})</span>
             </button>
             <button
               onClick={() => setActiveTab("hosted")}
-              className={`py-3 md:px-5 md:py-2.5 rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-wider transition-all duration-300 flex flex-col md:flex-row items-center justify-center gap-1 md:gap-1.5 ${
-                activeTab === "hosted"
-                  ? "bg-white/5 text-neon border border-neon/20 shadow-[0_0_15px_rgba(215,255,63,0.05)]"
-                  : "text-white/40 hover:text-white border border-transparent"
-              }`}
+              className={`py-3 md:px-5 md:py-2.5 rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-wider transition-all duration-300 flex flex-col md:flex-row items-center justify-center gap-1 md:gap-1.5 ${activeTab === "hosted"
+                ? "bg-white/5 text-neon border border-neon/20 shadow-[0_0_15px_rgba(215,255,63,0.05)]"
+                : "text-white/40 hover:text-white border border-transparent"
+                }`}
             >
               <span className="text-[12px] md:text-sm">🎾</span>
               <span className="text-center truncate w-full md:w-auto">Hosted ({hostedMatches.filter(m => m.status !== "CANCELED").length})</span>
             </button>
             <button
               onClick={() => setActiveTab("joined")}
-              className={`py-3 md:px-5 md:py-2.5 rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-wider transition-all duration-300 flex flex-col md:flex-row items-center justify-center gap-1 md:gap-1.5 ${
-                activeTab === "joined"
-                  ? "bg-white/5 text-neon border border-neon/20 shadow-[0_0_15px_rgba(215,255,63,0.05)]"
-                  : "text-white/40 hover:text-white border border-transparent"
-              }`}
+              className={`py-3 md:px-5 md:py-2.5 rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-wider transition-all duration-300 flex flex-col md:flex-row items-center justify-center gap-1 md:gap-1.5 ${activeTab === "joined"
+                ? "bg-white/5 text-neon border border-neon/20 shadow-[0_0_15px_rgba(215,255,63,0.05)]"
+                : "text-white/40 hover:text-white border border-transparent"
+                }`}
             >
               <span className="text-[12px] md:text-sm">🤝</span>
               <span className="text-center truncate w-full md:w-auto">Joined ({joinedMatches.filter(m => m.status !== "CANCELED").length})</span>
@@ -781,7 +814,7 @@ export default function DashboardPage() {
                   </p>
                 </div>
                 <div className="pt-2 w-full">
-                  <button 
+                  <button
                     onClick={() => setActiveTab("bookings")}
                     className="h-11 px-8 bg-white/5 hover:bg-white/10 border border-white/5 text-white/70 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2 mx-auto"
                   >
@@ -792,219 +825,109 @@ export default function DashboardPage() {
             ) : (
               <div className="grid gap-6">
                 {hostedMatches.filter(m => m.status !== "CANCELED").map((m) => {
-                  const mConfig = getMatchStatusConfig(m);
                   return (
-                    <Card key={m.id} className={`p-6 sm:p-8 !rounded-[2.5rem] border transition-all duration-300 ${mConfig.bgClass} shadow-2xl relative overflow-hidden group`}>
-                      {/* Subtle status glowing backdrop accent */}
+                    <Card
+                      key={m.id}
+                      id={`match-card-${m.id}`}
+                      className="p-6 sm:p-8 !rounded-[2.5rem] border border-white/10 bg-[#0F0F0F] transition-all duration-300 shadow-2xl relative overflow-hidden group hover:border-white/20"
+                    >
                       <div className="absolute top-0 right-0 w-64 h-64 bg-neon/5 blur-[80px] rounded-full pointer-events-none -z-10 group-hover:scale-110 transition-transform duration-500"></div>
 
                       <div className="flex flex-col gap-6">
-                        {/* 1. EMOTIONALLY-AWARE PREMIUM MATCH STATUS BANNER */}
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-white/5">
-                          <div className="flex items-center gap-3">
-                            <span className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg border ${mConfig.badgeClass}`}>
-                              {mConfig.badgeText}
-                            </span>
-                            <span className="text-[9px] font-black uppercase tracking-[0.2em] text-white/30 italic">
-                              Lobby ID: {m.id.slice(0, 8)}
-                            </span>
-                          </div>
-                          {mConfig.state !== "FINISHED" && mConfig.state !== "LIVE" && (
-                            <div className="text-[10px] font-black text-neon/80 uppercase italic tracking-wider bg-neon/5 border border-neon/10 rounded-lg px-2.5 py-1">
-                              🎾 Your match is active and live
-                            </div>
-                          )}
-                        </div>
-
-                        {/* 2. CORE SESSION INFO & MATCH DATA */}
-                        <div className="grid md:grid-cols-[1fr_auto] gap-8 items-start">
-                          <div className="space-y-4">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="text-[8px] font-black uppercase tracking-widest bg-white/5 text-white/60 px-2 py-1 rounded border border-white/10 italic select-none">
-                                {m.matchType}
-                              </span>
-                              <span className="text-[8px] font-black uppercase tracking-widest bg-violet-500/10 text-violet-400 px-2 py-1 rounded border border-violet-500/20 italic select-none">
-                                {m.skillLevel}
-                              </span>
-                              {/* Future Tag Placeholder */}
-                              <span className="text-[8px] font-black uppercase tracking-widest bg-white/[0.02] text-white/20 px-2 py-1 rounded border border-white/5 italic select-none" title="Future Release: Play for Leaderboard Points">
-                                🏆 Ranked Eligible
-                              </span>
-                            </div>
-
-                            <div>
-                              <h3 className="text-2xl sm:text-3xl font-black text-white italic uppercase tracking-tighter leading-none mb-2">
-                                {m.title}
-                              </h3>
-                              <p className="text-white/50 text-xs font-semibold leading-relaxed max-w-2xl italic">
-                                "{m.description || "Join our community open padel session. All skill levels welcome for active rallies!"}"
-                              </p>
-                            </div>
-
-                            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 pt-2 text-[10px] font-bold text-white/40 uppercase tracking-[0.25em] italic">
-                              <div className="flex items-center gap-1.5 text-white/80">
-                                <CalendarDays size={12} className="text-neon/50" /> {String(m.booking.date).slice(0, 10)}
-                              </div>
-                              <div className="flex items-center gap-1.5 text-white/80">
-                                <Clock size={12} className="text-neon/50" /> {formatMinutesToHHmm(m.booking.startTime)} - {formatMinutesToHHmm(m.booking.endTime)}
-                              </div>
-                              <div className="flex items-center gap-1.5 text-white/80 truncate">
-                                <MapPin size={12} className="text-neon/50" /> {m.booking.court.name}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* 3. PREMIUM PROGRESS VISUALIZATION */}
-                          <div className="flex flex-col md:items-end gap-3 bg-white/[0.02] border border-white/5 p-5 rounded-[1.8rem] w-full md:w-64">
-                            <div className="flex justify-between items-center w-full">
-                              <span className="text-[8px] font-black text-white/30 uppercase tracking-[0.3em]">Lobby Squad</span>
-                              <span className="text-xs font-black text-neon italic">
-                                {m.players.length} / {m.maxPlayers} Players
-                              </span>
-                            </div>
-
-                            {/* Sporty glowing progress dots */}
-                            <div className="flex items-center gap-2.5 my-2">
-                              {Array.from({ length: m.maxPlayers }).map((_, i) => {
-                                const isJoined = i < m.players.length;
-                                return (
-                                  <span
-                                    key={i}
-                                    className={`w-4 h-4 rounded-full border-2 transition-all duration-500 ${
-                                      isJoined
-                                        ? "bg-neon border-neon shadow-[0_0_12px_rgba(215,255,63,0.6)] scale-110"
-                                        : "bg-white/5 border-white/10"
-                                    }`}
-                                  />
-                                );
-                              })}
-                            </div>
-
-                            <p className="text-[9px] font-black text-white/40 uppercase tracking-[0.1em] text-center w-full">
-                              {m.players.length === m.maxPlayers ? "✨ FULL HOUSE" : `${m.maxPlayers - m.players.length} SLOTS REMAINING`}
-                            </p>
+                        <div className="flex items-center justify-between pb-4 border-b border-white/5">
+                          <div className="flex items-center gap-2 text-neon text-[9px] font-black uppercase tracking-[0.25em] italic">
+                            <span>🎾</span> Open Match Active
                           </div>
                         </div>
 
-                        {/* 4. SMART SUPPORTIVE MICROCOPY BLOCK */}
-                        <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4 flex items-start gap-3">
-                          <span className="text-lg">💡</span>
-                          <div>
-                            <p className="text-[9px] font-black text-white/30 uppercase tracking-widest leading-none mb-1">Host Reassurance</p>
-                            <p className="text-xs font-semibold text-white/70 italic leading-relaxed">
-                              {mConfig.reassurance}
-                            </p>
+                        <div className="space-y-1">
+                          <h3 className="text-xl sm:text-2xl font-black text-white italic uppercase tracking-tighter leading-none">
+                            {m.booking.court.venue?.name || "PadelGO"} - {m.booking.court.name}
+                          </h3>
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] font-bold text-white/50 uppercase tracking-widest mt-1">
+                            <span className="flex items-center gap-1"><CalendarDays size={12} className="text-neon/50 shrink-0" /> {String(m.booking.date).slice(0, 10)}</span>
+                            <span className="flex items-center gap-1"><Clock size={12} className="text-neon/50 shrink-0" /> {formatMinutesToHHmm(m.booking.startTime)} - {formatMinutesToHHmm(m.booking.endTime)}</span>
                           </div>
                         </div>
 
-                        {/* 5. ACTIVE PLAYER ROSTER WITH FUTURE PLACEHOLDERS */}
-                        <div className="pt-4 border-t border-white/5">
-                          <div className="flex justify-between items-center mb-3">
-                            <p className="text-[8px] font-black text-white/20 uppercase tracking-[0.4em]">Current Lobby Roster</p>
-                            <span className="text-[8px] font-black text-white/30 uppercase tracking-[0.15em] italic select-none">
-                              ⭐ Tap player to view stats
-                            </span>
+                        <div className="bg-white/[0.02] border border-white/5 p-4 sm:p-5 rounded-[1.8rem] space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[9px] font-black text-white/30 uppercase tracking-[0.2em]">Players Joined</span>
+                            <span className="text-xs font-black text-neon italic">{m.players.length} / {m.maxPlayers} Players</span>
                           </div>
-                          
-                          <div className="grid sm:grid-cols-2 gap-3">
-                            {m.players.map((p: any) => {
-                              const isHost = p.playerId === m.hostId;
+
+                          <div className="flex items-center gap-2 my-1">
+                            {Array.from({ length: m.maxPlayers }).map((_, i) => {
+                              const isJoined = i < m.players.length;
                               return (
-                                <div key={p.id} className="flex items-center justify-between bg-white/[0.03] border border-white/5 rounded-2xl px-4 py-3 group/roster hover:border-white/10 transition-colors">
-                                  <div className="flex items-center gap-3">
-                                    {/* Styled Avatar Initial */}
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-black ${
-                                      isHost ? "bg-neon text-black" : "bg-white/10 text-white/70"
-                                    }`}>
-                                      {String(p.player.name || "P").slice(0, 2).toUpperCase()}
-                                    </div>
-                                    <div>
-                                      <div className="flex items-center gap-1.5">
-                                        <span className="text-xs font-bold text-white">{p.player.name}</span>
-                                        {isHost && (
-                                          <span className="text-[7px] font-black text-neon uppercase italic tracking-widest bg-neon/10 px-1.5 py-0.5 rounded border border-neon/20 select-none">
-                                            Host
-                                          </span>
-                                        )}
-                                        {/* Future Verified Badge Placeholder */}
-                                        {!isHost && (
-                                          <CheckCircle2 size={10} className="text-sky-400 opacity-60" title="Future Release: Verified Skill Player" />
-                                        )}
-                                      </div>
-                                      {/* Future Rating & Tags Placeholders */}
-                                      <div className="flex items-center gap-2 mt-0.5 text-[8px] font-bold text-white/30 uppercase tracking-tighter">
-                                        <span className="flex items-center gap-0.5">
-                                          <Star size={8} className="text-amber-400 fill-amber-400" /> 4.8 Rating
-                                        </span>
-                                        <span>•</span>
-                                        <span className="text-white/40">Intermediate</span>
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  {/* Future Favorite Teammate Placeholder */}
-                                  <button 
-                                    className="text-white/15 hover:text-red-400 hover:scale-110 active:scale-95 transition-all"
-                                    title="Future Release: Add as Favorite Teammate"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setToast({ msg: "Future feature: Teammate added to your favorites list!", type: "success" });
-                                    }}
-                                  >
-                                    <Heart size={12} className="fill-current" />
-                                  </button>
-                                </div>
+                                <span
+                                  key={i}
+                                  className={`w-3.5 h-3.5 rounded-full transition-all duration-500 ${isJoined
+                                    ? "bg-neon border-neon shadow-[0_0_12px_rgba(215,255,63,0.6)] scale-110"
+                                    : "bg-white/5 border-2 border-white/10"
+                                    }`}
+                                />
                               );
                             })}
+                          </div>
 
-                            {/* Future Slot Invite Trigger Placeholder */}
-                            {m.players.length < m.maxPlayers && (
-                              <div 
-                                onClick={() => shareMatch(m)}
-                                className="flex items-center justify-center border border-dashed border-white/10 rounded-2xl p-4 bg-white/[0.01] hover:bg-white/[0.02] cursor-pointer group/invite transition-all"
-                              >
-                                <button 
-                                  className="flex items-center gap-2 text-[9px] font-black uppercase text-white/30 group-hover/invite:text-neon transition-colors tracking-widest"
-                                >
-                                  <PlusCircle size={14} className="text-white/20 group-hover/invite:text-neon transition-colors" />
-                                  Invite Teammate
-                                </button>
-                              </div>
-                            )}
+                          <p className="text-[9px] font-black text-white/40 uppercase tracking-[0.1em]">
+                            {m.maxPlayers - m.players.length === 0 ? "✨ FULL HOUSE" : `${m.maxPlayers - m.players.length} Slots Available`}
+                          </p>
+                        </div>
+
+                        <div className="space-y-2">
+                          <span className="text-[9px] font-black text-white/30 uppercase tracking-[0.2em] block">Invite Players</span>
+                          <div className="flex flex-col sm:flex-row gap-2">
+                            <button
+                              onClick={() => {
+                                const text = getInvitationText(m);
+                                window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+                              }}
+                              className="flex-1 h-11 bg-neon hover:bg-neon/90 text-black text-[9px] font-black uppercase tracking-widest rounded-xl transition-all hover:scale-[1.01] active:scale-95 shadow-[0_0_15px_rgba(215,255,63,0.15)] flex items-center justify-center gap-1.5 focus:outline-none"
+                            >
+                              <span>📱</span> Share via WhatsApp
+                            </button>
+                            <button
+                              onClick={() => {
+                                const text = getInvitationText(m);
+                                navigator.clipboard.writeText(text);
+                                setToast({ msg: "Invitation text copied to clipboard!", type: "success" });
+                              }}
+                              className="h-11 px-4 bg-white/5 hover:bg-white/10 border border-white/5 text-[9px] font-black text-white/60 uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-1.5 focus:outline-none"
+                            >
+                              Copy Invitation
+                            </button>
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(`${window.location.origin}/open-match/${m.id}`);
+                                setToast({ msg: "Match link copied to clipboard!", type: "success" });
+                              }}
+                              className="h-11 px-4 bg-white/5 hover:bg-white/10 border border-white/5 text-[9px] font-black text-white/60 uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-1.5 focus:outline-none"
+                            >
+                              Copy Link
+                            </button>
                           </div>
                         </div>
 
-                        {/* 6. HOST ACTION BUTTONS */}
-                        <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-white/5">
-                          <div className="flex items-center gap-2 w-full sm:w-auto">
-                            {/* proper Share Match UX button */}
-                            <button
-                              onClick={() => shareMatch(m)}
-                              className="flex-1 sm:flex-none h-11 px-5 bg-neon hover:bg-neon/90 text-black text-[9px] font-black uppercase tracking-widest rounded-xl transition-all hover:scale-[1.02] active:scale-95 shadow-[0_0_15px_rgba(215,255,63,0.15)] flex items-center justify-center gap-1.5"
-                            >
-                              <Share2 size={12} /> Share Match
-                            </button>
-                            
-                            {/* Future Invite Trigger Placeholder button */}
-                            <button
-                              onClick={() => {
-                                setToast({ msg: "Future feature: Directly invite players from your favorite list!", type: "success" });
-                              }}
-                              className="flex-1 sm:flex-none h-11 px-5 bg-white/5 hover:bg-white/10 border border-white/5 text-white/60 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-1.5"
-                            >
-                              <Users size={12} /> Invite Group
-                            </button>
-                          </div>
+                        <div className="flex items-center justify-between pt-4 border-t border-white/5">
+                          <span className="text-[9px] font-black text-white/40 uppercase tracking-[0.25em]">View Roster</span>
+                          <button
+                            onClick={() => setViewPlayersMatch(m)}
+                            className="text-[9px] font-black text-neon hover:text-neon/80 uppercase tracking-widest italic flex items-center gap-1 transition-colors focus:outline-none"
+                          >
+                            View Players →
+                          </button>
+                        </div>
 
-                          <div className="w-full sm:w-auto">
-                            <button
-                              onClick={() => cancelMatch(m.id)}
-                              disabled={isCancelMatchLoading === m.id}
-                              className="w-full sm:w-auto h-11 px-5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-[9px] font-black text-red-400 uppercase tracking-widest rounded-xl transition-all"
-                            >
-                              {isCancelMatchLoading === m.id ? "Canceling..." : "Cancel Match Room"}
-                            </button>
-                          </div>
+                        <div className="pt-2">
+                          <button
+                            onClick={() => cancelMatch(m.id)}
+                            disabled={isCancelMatchLoading === m.id}
+                            className="w-full h-11 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-[9px] font-black text-red-400 uppercase tracking-widest rounded-xl transition-all focus:outline-none"
+                          >
+                            {isCancelMatchLoading === m.id ? "Canceling..." : "Cancel Open Match"}
+                          </button>
                         </div>
                       </div>
                     </Card>
@@ -1041,187 +964,105 @@ export default function DashboardPage() {
                 {joinedMatches.filter(m => m.status !== "CANCELED").map((m) => {
                   const mConfig = getMatchStatusConfig(m);
                   return (
-                    <Card key={m.id} className={`p-6 sm:p-8 !rounded-[2.5rem] border transition-all duration-300 ${mConfig.bgClass} shadow-2xl relative overflow-hidden group`}>
+                    <Card
+                      key={m.id}
+                      id={`match-card-${m.id}`}
+                      className="p-6 sm:p-8 !rounded-[2.5rem] border border-white/10 bg-[#0F0F0F] transition-all duration-300 shadow-2xl relative overflow-hidden group hover:border-white/20"
+                    >
                       {/* Subtle status glowing backdrop accent */}
                       <div className="absolute top-0 right-0 w-64 h-64 bg-neon/5 blur-[80px] rounded-full pointer-events-none -z-10 group-hover:scale-110 transition-transform duration-500"></div>
 
                       <div className="flex flex-col gap-6">
-                        {/* 1. EMOTIONALLY-AWARE PREMIUM MATCH STATUS BANNER */}
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-white/5">
-                          <div className="flex items-center gap-3">
-                            <span className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg border ${mConfig.badgeClass}`}>
-                              {mConfig.badgeText}
-                            </span>
-                            <span className="text-[9px] font-black uppercase tracking-[0.2em] text-white/30 italic">
-                              Lobby ID: {m.id.slice(0, 8)}
-                            </span>
-                          </div>
-                          <div className="text-[10px] font-black text-white/40 uppercase italic tracking-wider">
-                            Host: <span className="text-white">{m.host.name}</span>
+                        {/* Header: Open Match Active */}
+                        <div className="flex items-center justify-between pb-4 border-b border-white/5">
+                          <div className="flex items-center gap-2 text-neon text-[9px] font-black uppercase tracking-[0.25em] italic">
+                            <span>🎾</span> Open Match Active
                           </div>
                         </div>
 
-                        {/* 2. CORE SESSION INFO & MATCH DATA */}
-                        <div className="grid md:grid-cols-[1fr_auto] gap-8 items-start">
-                          <div className="space-y-4">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="text-[8px] font-black uppercase tracking-widest bg-white/5 text-white/60 px-2 py-1 rounded border border-white/10 italic select-none">
-                                {m.matchType}
-                              </span>
-                              <span className="text-[8px] font-black uppercase tracking-widest bg-violet-500/10 text-violet-400 px-2 py-1 rounded border border-violet-500/20 italic select-none">
-                                {m.skillLevel}
-                              </span>
-                              {/* Future Tag Placeholder */}
-                              <span className="text-[8px] font-black uppercase tracking-widest bg-white/[0.02] text-white/20 px-2 py-1 rounded border border-white/5 italic select-none">
-                                🏆 Ranked Eligible
-                              </span>
-                            </div>
-
-                            <div>
-                              <h3 className="text-2xl sm:text-3xl font-black text-white italic uppercase tracking-tighter leading-none mb-2">
-                                {m.title}
-                              </h3>
-                              <p className="text-white/50 text-xs font-semibold leading-relaxed max-w-2xl italic">
-                                "{m.description || "Join our community open padel session. All skill levels welcome for active rallies!"}"
-                              </p>
-                            </div>
-
-                            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 pt-2 text-[10px] font-bold text-white/40 uppercase tracking-[0.25em] italic">
-                              <div className="flex items-center gap-1.5 text-white/80">
-                                <CalendarDays size={12} className="text-neon/50" /> {String(m.booking.date).slice(0, 10)}
-                              </div>
-                              <div className="flex items-center gap-1.5 text-white/80">
-                                <Clock size={12} className="text-neon/50" /> {formatMinutesToHHmm(m.booking.startTime)} - {formatMinutesToHHmm(m.booking.endTime)}
-                              </div>
-                              <div className="flex items-center gap-1.5 text-white/80 truncate">
-                                <MapPin size={12} className="text-neon/50" /> {m.booking.court.name}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* 3. PREMIUM PROGRESS VISUALIZATION */}
-                          <div className="flex flex-col md:items-end gap-3 bg-white/[0.02] border border-white/5 p-5 rounded-[1.8rem] w-full md:w-64">
-                            <div className="flex justify-between items-center w-full">
-                              <span className="text-[8px] font-black text-white/30 uppercase tracking-[0.3em]">Lobby Squad</span>
-                              <span className="text-xs font-black text-neon italic">
-                                {m.players.length} / {m.maxPlayers} Players
-                              </span>
-                            </div>
-
-                            {/* Sporty progress dots */}
-                            <div className="flex items-center gap-2.5 my-2">
-                              {Array.from({ length: m.maxPlayers }).map((_, i) => {
-                                const isJoined = i < m.players.length;
-                                return (
-                                  <span
-                                    key={i}
-                                    className={`w-4 h-4 rounded-full border-2 transition-all duration-500 ${
-                                      isJoined
-                                        ? "bg-neon border-neon shadow-[0_0_12px_rgba(215,255,63,0.6)] scale-110"
-                                        : "bg-white/5 border-white/10"
-                                    }`}
-                                  />
-                                );
-                              })}
-                            </div>
-
-                            <p className="text-[9px] font-black text-white/40 uppercase tracking-[0.1em] text-center w-full">
-                              {m.players.length === m.maxPlayers ? "✨ FULL HOUSE" : `${m.maxPlayers - m.players.length} SLOTS OPEN`}
-                            </p>
+                        {/* Court, Date, Time */}
+                        <div className="space-y-1">
+                          <h3 className="text-xl sm:text-2xl font-black text-white italic uppercase tracking-tighter leading-none">
+                            {m.booking.court.venue?.name || "PadelGO"} - {m.booking.court.name}
+                          </h3>
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] font-bold text-white/50 uppercase tracking-widest mt-1">
+                            <span className="flex items-center gap-1"><CalendarDays size={12} className="text-neon/50 shrink-0" /> {String(m.booking.date).slice(0, 10)}</span>
+                            <span className="flex items-center gap-1"><Clock size={12} className="text-neon/50 shrink-0" /> {formatMinutesToHHmm(m.booking.startTime)} - {formatMinutesToHHmm(m.booking.endTime)}</span>
                           </div>
                         </div>
 
-                        {/* 4. REASSURING PARTICIPANT SMART NOTE */}
-                        <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4 flex items-start gap-3">
-                          <span className="text-lg">🤝</span>
-                          <div>
-                            <p className="text-[9px] font-black text-white/30 uppercase tracking-widest leading-none mb-1">Squad Gathering</p>
-                            <p className="text-xs font-semibold text-white/70 italic leading-relaxed">
-                              {m.players.length === m.maxPlayers 
-                                ? "Lobby is full! Get ready for an excellent match. Tap 'Contact Host' to align on strategies." 
-                                : "Help fill this lobby! Invite your friends or share this match. The host is ready to play."}
-                            </p>
+                        {/* Players Joined: count + visual indicators */}
+                        <div className="bg-white/[0.02] border border-white/5 p-4 sm:p-5 rounded-[1.8rem] space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[9px] font-black text-white/30 uppercase tracking-[0.2em]">Players Joined</span>
+                            <span className="text-xs font-black text-neon italic">{m.players.length} / {m.maxPlayers} Players</span>
                           </div>
-                        </div>
 
-                        {/* 5. PLAYER ROSTER DISPLAY WITH FUTURE PLACEHOLDERS */}
-                        <div className="pt-4 border-t border-white/5">
-                          <p className="text-[8px] font-black text-white/20 uppercase tracking-[0.4em] mb-3">Lobby Roster</p>
-                          <div className="grid sm:grid-cols-2 gap-3">
-                            {m.players.map((p: any) => {
-                              const isHost = p.playerId === m.hostId;
+                          {/* visual dot progress indicator */}
+                          <div className="flex items-center gap-2 my-1">
+                            {Array.from({ length: m.maxPlayers }).map((_, i) => {
+                              const isJoined = i < m.players.length;
                               return (
-                                <div key={p.id} className="flex items-center justify-between bg-white/[0.03] border border-white/5 rounded-2xl px-4 py-3 group/roster hover:border-white/10 transition-colors">
-                                  <div className="flex items-center gap-3">
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-black ${
-                                      isHost ? "bg-neon text-black" : "bg-white/10 text-white/70"
-                                    }`}>
-                                      {String(p.player.name || "P").slice(0, 2).toUpperCase()}
-                                    </div>
-                                    <div>
-                                      <div className="flex items-center gap-1.5">
-                                        <span className="text-xs font-bold text-white">{p.player.name}</span>
-                                        {isHost && (
-                                          <span className="text-[7px] font-black text-neon uppercase italic tracking-widest bg-neon/10 px-1.5 py-0.5 rounded border border-neon/20 select-none">
-                                            Host
-                                          </span>
-                                        )}
-                                        {!isHost && (
-                                          <CheckCircle2 size={10} className="text-sky-400 opacity-60" />
-                                        )}
-                                      </div>
-                                      <div className="flex items-center gap-2 mt-0.5 text-[8px] font-bold text-white/30 uppercase tracking-tighter">
-                                        <span className="flex items-center gap-0.5">
-                                          <Star size={8} className="text-amber-400 fill-amber-400" /> 4.7 Rating
-                                        </span>
-                                        <span>•</span>
-                                        <span className="text-white/40">Intermediate</span>
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  <button 
-                                    className="text-white/15 hover:text-red-400 hover:scale-110 active:scale-95 transition-all"
-                                    title="Future Release: Favorite Teammate"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setToast({ msg: "Future feature: Teammate added to favorites!", type: "success" });
-                                    }}
-                                  >
-                                    <Heart size={12} className="fill-current" />
-                                  </button>
-                                </div>
+                                <span
+                                  key={i}
+                                  className={`w-3.5 h-3.5 rounded-full transition-all duration-500 ${isJoined
+                                    ? "bg-neon border-neon shadow-[0_0_12px_rgba(215,255,63,0.6)] scale-110"
+                                    : "bg-white/5 border-2 border-white/10"
+                                    }`}
+                                />
                               );
                             })}
                           </div>
+
+                          <p className="text-[9px] font-black text-white/40 uppercase tracking-[0.1em]">
+                            {m.maxPlayers - m.players.length === 0 ? "✨ FULL HOUSE" : `${m.maxPlayers - m.players.length} Slots Available`}
+                          </p>
                         </div>
 
-                        {/* 6. PARTICIPANT ACTION BUTTONS */}
-                        <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-white/5">
-                          <div className="flex items-center gap-2 w-full sm:w-auto">
-                            {/* Contact Host Button */}
-                            <a
-                              href={`https://wa.me/${m.host.whatsapp.replace(/\D/g, "")}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex-1 sm:flex-none h-11 px-6 bg-neon hover:bg-neon/90 text-black text-[9px] font-black uppercase tracking-widest rounded-xl transition-all hover:scale-[1.02] active:scale-95 shadow-[0_0_15px_rgba(215,255,63,0.15)] flex items-center justify-center gap-1.5"
-                            >
-                              <span>📱</span> Contact Host
-                            </a>
-
-                            {/* Share Match Button to let joined players help invite */}
+                        {/* Invite Players block */}
+                        <div className="space-y-2">
+                          <span className="text-[9px] font-black text-white/30 uppercase tracking-[0.2em] block">Invite Players</span>
+                          <div className="flex flex-col sm:flex-row gap-2">
                             <button
-                              onClick={() => shareMatch(m)}
-                              className="flex-1 sm:flex-none h-11 px-6 bg-white/5 hover:bg-white/10 border border-white/5 text-white/60 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-1.5"
+                              onClick={() => {
+                                const text = getInvitationText(m);
+                                window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+                              }}
+                              className="flex-1 h-11 bg-neon hover:bg-neon/90 text-black text-[9px] font-black uppercase tracking-widest rounded-xl transition-all hover:scale-[1.01] active:scale-95 shadow-[0_0_15px_rgba(215,255,63,0.15)] flex items-center justify-center gap-1.5 focus:outline-none"
                             >
-                              <Share2 size={12} /> Share Match
+                              <span>📱</span> Share via WhatsApp
+                            </button>
+                            <button
+                              onClick={() => {
+                                const text = getInvitationText(m);
+                                navigator.clipboard.writeText(text);
+                                setToast({ msg: "Invitation text copied to clipboard!", type: "success" });
+                              }}
+                              className="h-11 px-4 bg-white/5 hover:bg-white/10 border border-white/5 text-[9px] font-black text-white/60 uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-1.5 focus:outline-none"
+                            >
+                              Copy Invitation
+                            </button>
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(`${window.location.origin}/open-match/${m.id}`);
+                                setToast({ msg: "Match link copied to clipboard!", type: "success" });
+                              }}
+                              className="h-11 px-4 bg-white/5 hover:bg-white/10 border border-white/5 text-[9px] font-black text-white/60 uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-1.5 focus:outline-none"
+                            >
+                              Copy Link
                             </button>
                           </div>
+                        </div>
 
-                          {/* Future Invite Trigger Placeholder */}
-                          <div className="w-full sm:w-auto text-right text-[9px] font-black text-white/20 uppercase tracking-[0.2em] italic select-none">
-                            🔒 Secure PadelGO Matchmaking
-                          </div>
+                        {/* Players Joined: View Players trigger */}
+                        <div className="flex items-center justify-between pt-4 border-t border-white/5">
+                          <span className="text-[9px] font-black text-white/40 uppercase tracking-[0.25em]">View Roster</span>
+                          <button
+                            onClick={() => setViewPlayersMatch(m)}
+                            className="text-[9px] font-black text-neon hover:text-neon/80 uppercase tracking-widest italic flex items-center gap-1 transition-colors focus:outline-none"
+                          >
+                            View Players →
+                          </button>
                         </div>
                       </div>
                     </Card>
@@ -1251,16 +1092,16 @@ export default function DashboardPage() {
 
       {/* Detail Modal for Check-in */}
       {detailBooking && (
-        <div 
+        <div
           className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-md p-0 sm:p-4 animate-in fade-in duration-300"
           onClick={() => setDetailBooking(null)}
         >
-          <div 
+          <div
             className="bg-[#0F0F0F] w-full sm:max-w-md rounded-t-[2.5rem] sm:rounded-[2.5rem] shadow-2xl overflow-hidden border border-white/10 animate-in slide-in-from-bottom-10 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-300"
             onClick={e => e.stopPropagation()}
           >
             <div className="bg-[#1A1A1A] px-8 py-10 text-center relative border-b border-white/5">
-              <button 
+              <button
                 onClick={() => setDetailBooking(null)}
                 className="absolute top-5 right-5 w-10 h-10 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-full text-white transition-colors"
               >
@@ -1268,10 +1109,10 @@ export default function DashboardPage() {
               </button>
               <p className="text-neon font-bold uppercase tracking-widest text-[10px] mb-3">Booking Code</p>
               <h2 className="text-5xl font-black text-white tracking-tight">
-                {detailBooking.bookingCode || detailBooking.id.slice(0,8)}
+                {detailBooking.bookingCode || detailBooking.id.slice(0, 8)}
               </h2>
             </div>
-            
+
             <div className="p-8 space-y-6">
               <div className="text-center mb-2">
                 <p className="text-sm font-bold text-white/60 bg-white/5 border border-white/10 rounded-2xl py-4 px-5 inline-block">
@@ -1289,7 +1130,7 @@ export default function DashboardPage() {
                 </div>
                 <div className="flex justify-between items-center border-b border-white/5 pb-3">
                   <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">Date</span>
-                  <span className="text-sm font-black text-white">{String(detailBooking.date).slice(0,10)}</span>
+                  <span className="text-sm font-black text-white">{String(detailBooking.date).slice(0, 10)}</span>
                 </div>
                 <div className="flex justify-between items-center border-b border-white/5 pb-3">
                   <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">Time</span>
@@ -1312,9 +1153,8 @@ export default function DashboardPage() {
                 )}
                 <div className="flex justify-between items-center pt-1">
                   <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">Status</span>
-                  <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg border ${
-                    detailBooking.status === "CHECKED_IN" ? "bg-sky-500/10 text-sky-400 border-sky-500/20" : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                  }`}>
+                  <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg border ${detailBooking.status === "CHECKED_IN" ? "bg-sky-500/10 text-sky-400 border-sky-500/20" : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                    }`}>
                     {detailBooking.status === "CHECKED_IN" ? "Checked In" : "Confirmed"}
                   </span>
                 </div>
@@ -1335,31 +1175,50 @@ export default function DashboardPage() {
           <CreateOpenMatchModal
             booking={openMatchBooking as any}
             onClose={() => setOpenMatchBooking(null)}
-            onSuccess={async () => {
+            onSuccess={async (createdMatch) => {
               setToast({
                 msg: "Match room successfully created and published!",
                 type: "success",
               });
               setOpenMatchBooking(null);
+              setActiveTab("hosted");
               await refresh();
+
+              // Wait for DOM to render and scroll to the new card
+              setTimeout(() => {
+                const targetCard = document.getElementById(`match-card-${createdMatch?.id}`);
+                if (targetCard) {
+                  targetCard.scrollIntoView({ behavior: "smooth", block: "center" });
+                }
+              }, 600);
             }}
             onError={(msg) => setToast({ msg, type: "error" })}
           />
         )}
       </AnimatePresence>
 
+      {/* Players Joined Roster Modal */}
+      {viewPlayersMatch && (
+        <PlayersJoinedModal
+          isOpen={!!viewPlayersMatch}
+          match={viewPlayersMatch}
+          currentUserId={session?.user?.id || ""}
+          onClose={() => setViewPlayersMatch(null)}
+        />
+      )}
+
       {/* Sporty Minimalist Success Modal */}
       {successModal && (
-        <div 
+        <div
           className="fixed inset-0 z-[250] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in duration-300"
           onClick={() => setSuccessModal(null)}
         >
-          <div 
+          <div
             className="bg-[#0F0F0F] w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden border border-neon/20 p-8 space-y-6 text-center animate-in zoom-in-95 duration-300 relative"
             onClick={e => e.stopPropagation()}
           >
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-40 h-40 bg-neon/10 blur-[50px] rounded-full pointer-events-none -z-10"></div>
-            
+
             <div className="flex flex-col items-center space-y-4">
               {successModal === "booking" || successModal === "membership" ? (
                 <div className="w-16 h-16 rounded-full bg-neon/10 border border-neon/30 flex items-center justify-center text-neon shadow-[0_0_20px_rgba(215,255,63,0.2)]">
@@ -1381,7 +1240,7 @@ export default function DashboardPage() {
                 {successModal === "pending" && "Payment Pending"}
                 {successModal === "error" && "Payment Failed"}
               </h2>
-              
+
               <p className="text-white/60 text-sm italic font-medium leading-relaxed">
                 {successModal === "booking" && "Your court reservation has been fully secured. Get ready to hit the court!"}
                 {successModal === "membership" && "Your Elite Membership request has been processed. Your member privileges are now active!"}
@@ -1408,7 +1267,7 @@ function StatCard({ icon, label, value, color, isRole }: { icon: React.ReactNode
     emerald: "from-emerald-500/10 to-transparent border-emerald-500/10 text-emerald-400 shadow-emerald-500/5",
     default: "from-white/[0.03] to-transparent border-white/5 text-white"
   };
-  
+
   const selectedStyle = color ? colorMap[color] : colorMap.default;
 
   return (

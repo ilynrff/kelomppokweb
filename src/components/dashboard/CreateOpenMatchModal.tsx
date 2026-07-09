@@ -19,7 +19,7 @@ type Booking = {
 type CreateOpenMatchModalProps = {
   booking: Booking;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (match: any) => void;
   onError: (msg: string) => void;
 };
 
@@ -97,7 +97,7 @@ export function CreateOpenMatchModal({
         throw new Error(data.error || "Failed to create open match.");
       }
 
-      onSuccess();
+      onSuccess(data);
     } catch (err: any) {
       onError(err.message || "An unexpected error occurred.");
     } finally {
