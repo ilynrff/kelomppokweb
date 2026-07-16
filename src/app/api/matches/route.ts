@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { validateMembershipStatus } from "@/lib/membershipService";
 import { getErrorMessage } from "@/lib/errorMessage";
 import { getOpenMatchLifecycleState } from "@/lib/bookingTime";
 
@@ -29,6 +30,16 @@ export async function POST(req: Request) {
 
     if (!bookingId || !title || !matchType || !skillLevel || !maxPlayers) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+
+    if (visibility === "MEMBERS_ONLY") {
+      const dbUser = await validateMembershipStatus(session.user.id);
+      if (!dbUser || dbUser.membershipStatus !== "ACTIVE") {
+        return NextResponse.json(
+          { error: "Hanya member aktif yang dapat membuat pertandingan khusus member." },
+          { status: 403 }
+        );
+      }
     }
 
     // Verify booking is owned by host and is CONFIRMED / RESCHEDULE_APPROVED
@@ -130,10 +141,7 @@ export async function GET(req: Request) {
       let isMember = false;
       if (session?.user?.id) {
         try {
-          const dbUser = await prisma.user.findUnique({
-            where: { id: session.user.id },
-            select: { membershipStatus: true }
-          });
+          const dbUser = await validateMembershipStatus(session.user.id);
           isMember = dbUser?.membershipStatus === "ACTIVE";
         } catch (dbError) {
           console.error("DEBUG: Failed to query user membership status in matches feed:", dbError);

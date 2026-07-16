@@ -21,7 +21,9 @@ export default function BookingPage() {
   const router = useRouter();
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === "ADMIN";
-  const membershipStatus = (session?.user as any)?.membershipStatus || "FREE";
+  const expiresAt = (session?.user as any)?.membershipExpiresAt;
+  const isExpired = expiresAt ? new Date() >= new Date(expiresAt) : false;
+  const membershipStatus = isExpired ? "EXPIRED" : ((session?.user as any)?.membershipStatus || "FREE");
   const isMember = membershipStatus === "ACTIVE";
 
   const [openMatches, setOpenMatches] = useState<any[]>([]);

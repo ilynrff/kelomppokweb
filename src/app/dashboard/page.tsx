@@ -362,6 +362,11 @@ export default function DashboardPage() {
     return () => clearInterval(interval);
   }, []);
 
+  const userExpiresAt = (session?.user as any)?.membershipExpiresAt;
+  const isUserMembershipExpired = userExpiresAt ? now >= new Date(userExpiresAt) : false;
+  const userMembershipStatus = isUserMembershipExpired ? "EXPIRED" : ((session?.user as any)?.membershipStatus || "FREE");
+  const userMembershipType = isUserMembershipExpired ? "BASIC" : ((session?.user as any)?.membership || "BASIC");
+
   const isMatchCompleted = (m: any) => {
     const jakarta = getJakartaTime(now);
     const bookingDateStr = String(m.booking.date).slice(0, 10);
@@ -764,12 +769,12 @@ _Play Smarter. Book Faster._`;
 
         {/* SECTION 2 — MEMBERSHIP HERO CARD */}
         <div className="animate-fade-in-up delay-100">
-          {(session?.user as any)?.membershipStatus === "FREE" ? (
+          {userMembershipStatus === "FREE" ? (
             <UpgradeInvitationCard />
           ) : (
             <MembershipStatusCard
-              status={(session?.user as any)?.membershipStatus}
-              type={(session?.user as any)?.membership}
+              status={userMembershipStatus}
+              type={userMembershipType}
               expiresAt={(session?.user as any)?.membershipExpiresAt}
               userName={session?.user?.name || ""}
             />
@@ -797,7 +802,7 @@ _Play Smarter. Book Faster._`;
           <StatCard
             icon={<Gem size={16} className="text-white/20" />}
             label="Identity"
-            value={(session?.user as any)?.membership || "BASIC"}
+            value={userMembershipType}
             isRole
           />
         </div>

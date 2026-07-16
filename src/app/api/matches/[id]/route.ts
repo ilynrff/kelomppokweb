@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { validateMembershipStatus } from "@/lib/membershipService";
 import { getErrorMessage } from "@/lib/errorMessage";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
@@ -59,10 +60,7 @@ export async function GET(
       if (!session) {
         return NextResponse.json({ error: "Unauthorized. Members-only match." }, { status: 401 });
       }
-      const dbUser = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { membershipStatus: true }
-      });
+      const dbUser = await validateMembershipStatus(session.user.id);
       if (!dbUser || dbUser.membershipStatus !== "ACTIVE") {
         return NextResponse.json({ error: "Access denied. Members-only match." }, { status: 403 });
       }

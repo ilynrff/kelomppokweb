@@ -13,6 +13,8 @@ function normalizeWhatsApp(whatsapp: string) {
   return "+" + cleaned;
 }
 
+import { validateMembershipStatus } from "./membershipService";
+
 export const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({
@@ -114,14 +116,25 @@ export const authOptions: NextAuthOptions = {
       return token;
     },
     async session({ session, token }) {
-      if (session.user) {
-        (session.user as any).id = token.id as string;
-        (session.user as any).whatsapp = token.whatsapp as string;
-        (session.user as any).role = token.role as string;
-        (session.user as any).membership = token.membership as string;
-        (session.user as any).membershipStatus = token.membershipStatus as string;
-        (session.user as any).membershipExpiresAt = token.membershipExpiresAt;
-        session.user.name = token.name as string;
+      if (session.user && token.id) {
+        const freshUser = await validateMembershipStatus(token.id as string);
+        if (freshUser) {
+          (session.user as any).id = freshUser.id;
+          (session.user as any).whatsapp = freshUser.whatsapp;
+          (session.user as any).role = freshUser.role;
+          (session.user as any).membership = freshUser.membership;
+          (session.user as any).membershipStatus = freshUser.membershipStatus;
+          (session.user as any).membershipExpiresAt = freshUser.membershipExpiresAt;
+          session.user.name = freshUser.name;
+        } else {
+          (session.user as any).id = token.id as string;
+          (session.user as any).whatsapp = token.whatsapp as string;
+          (session.user as any).role = token.role as string;
+          (session.user as any).membership = token.membership as string;
+          (session.user as any).membershipStatus = token.membershipStatus as string;
+          (session.user as any).membershipExpiresAt = token.membershipExpiresAt;
+          session.user.name = token.name as string;
+        }
       }
       return session;
     }

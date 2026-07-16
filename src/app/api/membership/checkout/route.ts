@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { validateMembershipStatus } from "@/lib/membershipService";
 import { createSnapTransaction } from "@/lib/midtrans";
 import { getErrorMessage } from "@/lib/errorMessage";
 
@@ -17,11 +18,8 @@ export async function POST(req: Request) {
 
     const userId = session.user.id;
 
-    // Get current user details from database
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, name: true, whatsapp: true, membershipStatus: true },
-    });
+    // Get current user details from database and check membership expiration
+    const user = await validateMembershipStatus(userId);
 
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });

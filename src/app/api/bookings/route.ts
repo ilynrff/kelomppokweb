@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { Prisma } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { validateMembershipStatus } from "@/lib/membershipService";
 import {
   DEFAULT_CLOSE_MINUTES,
   DEFAULT_OPEN_MINUTES,
@@ -84,6 +85,8 @@ export async function GET(req: Request) {
     const userRole = session.user.role;
     const userId = session.user.id;
 
+    await validateMembershipStatus(userId);
+
     const whereClause: any = userRole === "ADMIN" ? {} : { userId };
 
     if (dateQuery) {
@@ -137,11 +140,8 @@ export async function POST(req: Request) {
 
     const userId = session.user.id;
 
-    // Verify user still exists in DB (to prevent P2003 if DB was reset)
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, name: true, whatsapp: true, membership: true, membershipStatus: true },
-    });
+    // Verify user still exists in DB and check membership expiration
+    const user = await validateMembershipStatus(userId);
 
     if (!user) {
       console.warn(`API: Session user ${userId} not found in database. Stale session?`);

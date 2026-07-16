@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { validateMembershipStatus } from "@/lib/membershipService";
 import { getErrorMessage } from "@/lib/errorMessage";
 import { createNotification } from "@/lib/notifications";
 
@@ -39,10 +40,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
     // Enforce Members Only join gating check
     if (match.visibility === "MEMBERS_ONLY") {
-      const dbUser = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { membershipStatus: true }
-      });
+      const dbUser = await validateMembershipStatus(session.user.id);
       if (!dbUser || dbUser.membershipStatus !== "ACTIVE") {
         return NextResponse.json(
           { error: "This match is restricted to active Members only" },

@@ -12,6 +12,12 @@ import { MembershipStatusCard } from "@/components/profile/MembershipStatusCard"
 
 export default function ProfilePage() {
   const { data: session, update: updateSession } = useSession();
+
+  const expiresAt = (session?.user as any)?.membershipExpiresAt;
+  const isExpired = expiresAt ? new Date() >= new Date(expiresAt) : false;
+  const membershipStatus = isExpired ? "EXPIRED" : ((session?.user as any)?.membershipStatus || "FREE");
+  const membershipType = isExpired ? "BASIC" : ((session?.user as any)?.membership || "BASIC");
+
   const [membership, setMembership] = useState<string | null>(null);
   
   // Profile Editing State
@@ -224,8 +230,8 @@ export default function ProfilePage() {
 
           <div className="space-y-8">
             <MembershipStatusCard 
-              status={(session?.user as any)?.membershipStatus || "FREE"}
-              type={(session?.user as any)?.membership || "BASIC"}
+              status={membershipStatus}
+              type={membershipType}
               expiresAt={(session?.user as any)?.membershipExpiresAt}
               userName={session?.user?.name || ""}
               isCompact

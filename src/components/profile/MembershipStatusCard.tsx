@@ -170,19 +170,11 @@ export function MembershipStatusCard({ status, type, expiresAt, userName, isComp
                   Verification in Progress
                 </div>
               ) : isExpired ? (
-                isAlreadyMember ? (
-                  <Link href="/dashboard" className="w-full sm:w-auto">
-                    <Button className={`${isCompact ? 'h-10 px-6 text-[9px]' : 'h-11 px-8 text-[10px]'} bg-white text-black font-black italic uppercase tracking-[0.2em] rounded-xl hover:scale-[1.02]`}>
-                      View Dashboard <ArrowRight size={isCompact ? 12 : 14} className="ml-2" />
-                    </Button>
-                  </Link>
-                ) : (
-                  <Link href="/membership/payment" className="w-full sm:w-auto">
-                    <Button className={`${isCompact ? 'h-10 px-6 text-[9px]' : 'h-11 px-8 text-[10px]'} bg-neon text-black font-black italic uppercase tracking-[0.2em] rounded-xl hover:scale-[1.02] shadow-lg shadow-neon/10`}>
-                      Reactivate <ArrowRight size={isCompact ? 12 : 14} className="ml-2" />
-                    </Button>
-                  </Link>
-                )
+                <Link href="/membership/payment" className="w-full sm:w-auto">
+                  <Button className={`${isCompact ? 'h-10 px-6 text-[9px]' : 'h-11 px-8 text-[10px]'} bg-neon text-black font-black italic uppercase tracking-[0.2em] rounded-xl hover:scale-[1.02] shadow-lg shadow-neon/10`}>
+                    Renew Membership <ArrowRight size={isCompact ? 12 : 14} className="ml-2" />
+                  </Button>
+                </Link>
               ) : (
                 <Link href="/membership" className="w-full sm:w-auto">
                   <Button className={`${isCompact ? 'h-10 px-6 text-[9px]' : 'h-11 px-8 text-[10px]'} bg-neon text-black font-black italic uppercase tracking-[0.2em] rounded-xl hover:scale-[1.02] shadow-lg shadow-neon/10`}>
