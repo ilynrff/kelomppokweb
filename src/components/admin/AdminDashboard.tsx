@@ -10,7 +10,6 @@ import {
 } from "lucide-react";
 import { BookingManager } from "./BookingManager";
 import { CourtManager } from "./CourtManager";
-import { CourtSchedule } from "./CourtSchedule";
 import { MembershipManager } from "./MembershipManager";
 import { getSessionLifecycleState, getOpenMatchLifecycleState } from "@/lib/bookingTime";
 import { Toast } from "@/components/ui/Toast";
@@ -1331,10 +1330,7 @@ export function AdminDashboard({
                 </div>
               </div>
 
-              {/* CLASSIC TABLE HEATMAP GRID */}
-              <div className="pt-4 border-t border-white/5">
-                <CourtSchedule />
-              </div>
+
             </div>
           )}
 
