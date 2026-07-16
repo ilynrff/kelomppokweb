@@ -15,6 +15,7 @@ import { PaymentDeadlineBadge } from "@/components/dashboard/PaymentDeadlineBadg
 import { RescheduleModal } from "@/components/dashboard/RescheduleModal";
 import { BookingTimeAwareness } from "@/components/dashboard/BookingTimeAwareness";
 import { formatMinutesToHHmm, getOpenMatchLifecycleState } from "@/lib/bookingTime";
+import { getJakartaTime } from "@/lib/timezone";
 import { getErrorMessage } from "@/lib/errorMessage";
 import { fetchJson } from "@/lib/fetchJson";
 import { MembershipStatusCard } from "@/components/profile/MembershipStatusCard";
@@ -58,7 +59,7 @@ const loadSnapScript = (clientKey: string, isProduction: boolean): Promise<boole
     if (typeof window === "undefined") {
       resolve(false);
       return;
-    }
+      }
     if ((window as any).snap) {
       resolve(true);
       return;
@@ -92,11 +93,39 @@ const BookingRow = React.memo(({
   onShowDetail: (b: Booking) => void,
   onOpenMatch: (b: Booking) => void
 }) => {
+  const [now, setNow] = useState(new Date());
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setNow(new Date());
+    }, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const getBookingMatchStatus = (b: Booking) => {
+    const jakarta = getJakartaTime(now);
+    const bookingDateStr = String(b.date).slice(0, 10);
+    
+    if (bookingDateStr > jakarta.dateStr) {
+      return "UPCOMING";
+    } else if (bookingDateStr < jakarta.dateStr) {
+      return "COMPLETED";
+    } else {
+      if (jakarta.nowMinutes < b.startTime) {
+        return "UPCOMING";
+      } else if (jakarta.nowMinutes >= b.endTime) {
+        return "COMPLETED";
+      } else {
+        return "ACTIVE";
+      }
+    }
+  };
+
   const bookingStart = new Date(b.date);
   bookingStart.setUTCMinutes(bookingStart.getUTCMinutes() + b.startTime);
-  const hoursUntil = (bookingStart.getTime() - Date.now()) / 3600000;
+  const hoursUntil = (bookingStart.getTime() - now.getTime()) / 3600000;
   const canReschedule = hoursUntil > 12;
-  const isExpiredByTime = b.expiresAt ? new Date(b.expiresAt) < new Date() : false;
+  const isExpiredByTime = b.expiresAt ? new Date(b.expiresAt) < now : false;
 
   const isClickable = b.status === "CONFIRMED" || b.status === "RESCHEDULE_APPROVED" || b.status === "CHECKED_IN";
 
@@ -181,9 +210,28 @@ const BookingRow = React.memo(({
           {/* Action Buttons */}
           <div className="grid grid-cols-2 md:flex md:flex-row gap-2 w-full md:w-auto mt-2 md:mt-0">
             {b.openMatch && b.openMatch.status !== "CANCELED" ? (
-              <div className="col-span-2 md:col-span-1 flex items-center justify-center gap-1.5 h-10 px-4 rounded-xl border border-neon/20 bg-neon/5 text-[9px] font-black text-neon uppercase tracking-widest italic shadow-[0_0_10px_rgba(215,255,63,0.05)] select-none w-full">
-                🎾 Match Active
-              </div>
+              (() => {
+                const status = getBookingMatchStatus(b);
+                if (status === "UPCOMING") {
+                  return (
+                    <div className="col-span-2 md:col-span-1 flex items-center justify-center gap-1.5 h-10 px-4 rounded-xl border border-blue-500/20 bg-blue-500/10 text-[9px] font-black text-blue-400 uppercase tracking-widest italic shadow-[0_0_10px_rgba(59,130,246,0.05)] select-none w-full md:w-auto">
+                      🎾 Upcoming
+                    </div>
+                  );
+                } else if (status === "ACTIVE") {
+                  return (
+                    <div className="col-span-2 md:col-span-1 flex items-center justify-center gap-1.5 h-10 px-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 text-[9px] font-black text-emerald-400 uppercase tracking-widest italic shadow-[0_0_10px_rgba(16,185,129,0.05)] select-none w-full md:w-auto">
+                      🎾 Match Active
+                    </div>
+                  );
+                } else {
+                  return (
+                    <div className="col-span-2 md:col-span-1 flex items-center justify-center gap-1.5 h-10 px-4 rounded-xl border border-white/10 bg-white/5 text-[9px] font-black text-white/40 uppercase tracking-widest italic select-none w-full md:w-auto">
+                      🎾 Match Completed
+                    </div>
+                  );
+                }
+              })()
             ) : (
               (b.status === "CONFIRMED" || b.status === "RESCHEDULE_APPROVED" || b.status === "CHECKED_IN") && (
                 <button
@@ -304,6 +352,27 @@ export default function DashboardPage() {
   const [openMatchBooking, setOpenMatchBooking] = useState<Booking | null>(null);
   const [isCancelMatchLoading, setIsCancelMatchLoading] = useState<string | null>(null);
   const [viewPlayersMatch, setViewPlayersMatch] = useState<any | null>(null);
+
+  const [now, setNow] = useState(new Date());
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setNow(new Date());
+    }, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const isMatchCompleted = (m: any) => {
+    const jakarta = getJakartaTime(now);
+    const bookingDateStr = String(m.booking.date).slice(0, 10);
+    if (bookingDateStr < jakarta.dateStr) {
+      return true;
+    } else if (bookingDateStr > jakarta.dateStr) {
+      return false;
+    } else {
+      return jakarta.nowMinutes >= m.booking.endTime;
+    }
+  };
 
   const canFetch = status === "authenticated";
   const isInteracting = !!rescheduleBooking || !!detailBooking || !!payingBookingId;
@@ -825,6 +894,7 @@ _Play Smarter. Book Faster._`;
             ) : (
               <div className="grid gap-6">
                 {hostedMatches.filter(m => m.status !== "CANCELED").map((m) => {
+                  const isCompleted = isMatchCompleted(m);
                   return (
                     <Card
                       key={m.id}
@@ -835,9 +905,15 @@ _Play Smarter. Book Faster._`;
 
                       <div className="flex flex-col gap-6">
                         <div className="flex items-center justify-between pb-4 border-b border-white/5">
-                          <div className="flex items-center gap-2 text-neon text-[9px] font-black uppercase tracking-[0.25em] italic">
-                            <span>🎾</span> Open Match Active
-                          </div>
+                          {isCompleted ? (
+                            <div className="flex items-center gap-2 text-white/40 text-[9px] font-black uppercase tracking-[0.25em] italic">
+                              <span>✅</span> MATCH COMPLETED
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 text-neon text-[9px] font-black uppercase tracking-[0.25em] italic">
+                              <span>🎾</span> Open Match Active
+                            </div>
+                          )}
                         </div>
 
                         <div className="space-y-1">
@@ -872,43 +948,46 @@ _Play Smarter. Book Faster._`;
                           </div>
 
                           <p className="text-[9px] font-black text-white/40 uppercase tracking-[0.1em]">
-                            {m.maxPlayers - m.players.length === 0 ? "✨ FULL HOUSE" : `${m.maxPlayers - m.players.length} Slots Available`}
+                            {isCompleted ? "Match Finished" : (m.maxPlayers - m.players.length === 0 ? "✨ FULL HOUSE" : `${m.maxPlayers - m.players.length} Slots Available`)}
                           </p>
                         </div>
 
-                        <div className="space-y-2">
-                          <span className="text-[9px] font-black text-white/30 uppercase tracking-[0.2em] block">Invite Players</span>
-                          <div className="flex flex-col sm:flex-row gap-2">
-                            <button
-                              onClick={() => {
-                                const text = getInvitationText(m);
-                                window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
-                              }}
-                              className="flex-1 h-11 bg-neon hover:bg-neon/90 text-black text-[9px] font-black uppercase tracking-widest rounded-xl transition-all hover:scale-[1.01] active:scale-95 shadow-[0_0_15px_rgba(215,255,63,0.15)] flex items-center justify-center gap-1.5 focus:outline-none"
-                            >
-                              <span>📱</span> Share via WhatsApp
-                            </button>
-                            <button
-                              onClick={() => {
-                                const text = getInvitationText(m);
-                                navigator.clipboard.writeText(text);
-                                setToast({ msg: "Invitation text copied to clipboard!", type: "success" });
-                              }}
-                              className="h-11 px-4 bg-white/5 hover:bg-white/10 border border-white/5 text-[9px] font-black text-white/60 uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-1.5 focus:outline-none"
-                            >
-                              Copy Invitation
-                            </button>
-                            <button
-                              onClick={() => {
-                                navigator.clipboard.writeText(`${window.location.origin}/open-match/${m.id}`);
-                                setToast({ msg: "Match link copied to clipboard!", type: "success" });
-                              }}
-                              className="h-11 px-4 bg-white/5 hover:bg-white/10 border border-white/5 text-[9px] font-black text-white/60 uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-1.5 focus:outline-none"
-                            >
-                              Copy Link
-                            </button>
+                        {/* Invite Players block (Only active matches) */}
+                        {!isCompleted && (
+                          <div className="space-y-2">
+                            <span className="text-[9px] font-black text-white/30 uppercase tracking-[0.2em] block">Invite Players</span>
+                            <div className="flex flex-col sm:flex-row gap-2">
+                              <button
+                                onClick={() => {
+                                  const text = getInvitationText(m);
+                                  window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+                                }}
+                                className="w-full sm:flex-1 h-11 px-4 bg-neon hover:bg-neon/90 text-black text-[9px] font-black uppercase tracking-widest rounded-xl transition-all hover:scale-[1.01] active:scale-95 shadow-[0_0_15px_rgba(215,255,63,0.15)] flex items-center justify-center gap-1.5 focus:outline-none"
+                              >
+                                <span>📱</span> Share via WhatsApp
+                              </button>
+                              <button
+                                onClick={() => {
+                                  const text = getInvitationText(m);
+                                  navigator.clipboard.writeText(text);
+                                  setToast({ msg: "Invitation text copied successfully", type: "success" });
+                                }}
+                                className="w-full sm:w-auto h-11 px-4 bg-white/5 hover:bg-white/10 border border-white/5 text-[9px] font-black text-white/60 uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-1.5 focus:outline-none"
+                              >
+                                Copy Invitation
+                              </button>
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard.writeText(`${window.location.origin}/open-match/${m.id}`);
+                                  setToast({ msg: "Link copied successfully", type: "success" });
+                                }}
+                                className="w-full sm:w-auto h-11 px-4 bg-white/5 hover:bg-white/10 border border-white/5 text-[9px] font-black text-white/60 uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-1.5 focus:outline-none"
+                              >
+                                Copy Link
+                              </button>
+                            </div>
                           </div>
-                        </div>
+                        )}
 
                         <div className="flex items-center justify-between pt-4 border-t border-white/5">
                           <span className="text-[9px] font-black text-white/40 uppercase tracking-[0.25em]">View Roster</span>
@@ -920,15 +999,27 @@ _Play Smarter. Book Faster._`;
                           </button>
                         </div>
 
-                        <div className="pt-2">
-                          <button
-                            onClick={() => cancelMatch(m.id)}
-                            disabled={isCancelMatchLoading === m.id}
-                            className="w-full h-11 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-[9px] font-black text-red-400 uppercase tracking-widest rounded-xl transition-all focus:outline-none"
-                          >
-                            {isCancelMatchLoading === m.id ? "Canceling..." : "Cancel Open Match"}
-                          </button>
-                        </div>
+                        {/* Cancel Open Match / Completed Message Banner */}
+                        {isCompleted ? (
+                          <div className="bg-white/[0.02] border border-white/5 p-4 rounded-2xl text-center space-y-1">
+                            <p className="text-xs font-black text-white/80 uppercase tracking-wider">
+                              Match Finished
+                            </p>
+                            <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest leading-relaxed">
+                              This match has ended.<br />Thank you for playing with PADELGO.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="pt-2">
+                            <button
+                              onClick={() => cancelMatch(m.id)}
+                              disabled={isCancelMatchLoading === m.id}
+                              className="w-full h-11 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-[9px] font-black text-red-400 uppercase tracking-widest rounded-xl transition-all focus:outline-none"
+                            >
+                              {isCancelMatchLoading === m.id ? "Canceling..." : "Cancel Open Match"}
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </Card>
                   );
@@ -962,7 +1053,7 @@ _Play Smarter. Book Faster._`;
             ) : (
               <div className="grid gap-6">
                 {joinedMatches.filter(m => m.status !== "CANCELED").map((m) => {
-                  const mConfig = getMatchStatusConfig(m);
+                  const isCompleted = isMatchCompleted(m);
                   return (
                     <Card
                       key={m.id}
@@ -973,11 +1064,17 @@ _Play Smarter. Book Faster._`;
                       <div className="absolute top-0 right-0 w-64 h-64 bg-neon/5 blur-[80px] rounded-full pointer-events-none -z-10 group-hover:scale-110 transition-transform duration-500"></div>
 
                       <div className="flex flex-col gap-6">
-                        {/* Header: Open Match Active */}
+                        {/* Header: Open Match Active / Completed */}
                         <div className="flex items-center justify-between pb-4 border-b border-white/5">
-                          <div className="flex items-center gap-2 text-neon text-[9px] font-black uppercase tracking-[0.25em] italic">
-                            <span>🎾</span> Open Match Active
-                          </div>
+                          {isCompleted ? (
+                            <div className="flex items-center gap-2 text-white/40 text-[9px] font-black uppercase tracking-[0.25em] italic">
+                              <span>✅</span> MATCH COMPLETED
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 text-neon text-[9px] font-black uppercase tracking-[0.25em] italic">
+                              <span>🎾</span> Open Match Active
+                            </div>
+                          )}
                         </div>
 
                         {/* Court, Date, Time */}
@@ -991,7 +1088,6 @@ _Play Smarter. Book Faster._`;
                           </div>
                         </div>
 
-                        {/* Players Joined: count + visual indicators */}
                         <div className="bg-white/[0.02] border border-white/5 p-4 sm:p-5 rounded-[1.8rem] space-y-3">
                           <div className="flex items-center justify-between">
                             <span className="text-[9px] font-black text-white/30 uppercase tracking-[0.2em]">Players Joined</span>
@@ -1015,44 +1111,46 @@ _Play Smarter. Book Faster._`;
                           </div>
 
                           <p className="text-[9px] font-black text-white/40 uppercase tracking-[0.1em]">
-                            {m.maxPlayers - m.players.length === 0 ? "✨ FULL HOUSE" : `${m.maxPlayers - m.players.length} Slots Available`}
+                            {isCompleted ? "Match Finished" : (m.maxPlayers - m.players.length === 0 ? "✨ FULL HOUSE" : `${m.maxPlayers - m.players.length} Slots Available`)}
                           </p>
                         </div>
 
-                        {/* Invite Players block */}
-                        <div className="space-y-2">
-                          <span className="text-[9px] font-black text-white/30 uppercase tracking-[0.2em] block">Invite Players</span>
-                          <div className="flex flex-col sm:flex-row gap-2">
-                            <button
-                              onClick={() => {
-                                const text = getInvitationText(m);
-                                window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
-                              }}
-                              className="flex-1 h-11 bg-neon hover:bg-neon/90 text-black text-[9px] font-black uppercase tracking-widest rounded-xl transition-all hover:scale-[1.01] active:scale-95 shadow-[0_0_15px_rgba(215,255,63,0.15)] flex items-center justify-center gap-1.5 focus:outline-none"
-                            >
-                              <span>📱</span> Share via WhatsApp
-                            </button>
-                            <button
-                              onClick={() => {
-                                const text = getInvitationText(m);
-                                navigator.clipboard.writeText(text);
-                                setToast({ msg: "Invitation text copied to clipboard!", type: "success" });
-                              }}
-                              className="h-11 px-4 bg-white/5 hover:bg-white/10 border border-white/5 text-[9px] font-black text-white/60 uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-1.5 focus:outline-none"
-                            >
-                              Copy Invitation
-                            </button>
-                            <button
-                              onClick={() => {
-                                navigator.clipboard.writeText(`${window.location.origin}/open-match/${m.id}`);
-                                setToast({ msg: "Match link copied to clipboard!", type: "success" });
-                              }}
-                              className="h-11 px-4 bg-white/5 hover:bg-white/10 border border-white/5 text-[9px] font-black text-white/60 uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-1.5 focus:outline-none"
-                            >
-                              Copy Link
-                            </button>
+                        {/* Invite Players block (Only active matches) */}
+                        {!isCompleted && (
+                          <div className="space-y-2">
+                            <span className="text-[9px] font-black text-white/30 uppercase tracking-[0.2em] block">Invite Players</span>
+                            <div className="flex flex-col sm:flex-row gap-2">
+                              <button
+                                onClick={() => {
+                                  const text = getInvitationText(m);
+                                  window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+                                }}
+                                className="w-full sm:flex-1 h-11 px-4 bg-neon hover:bg-neon/90 text-black text-[9px] font-black uppercase tracking-widest rounded-xl transition-all hover:scale-[1.01] active:scale-95 shadow-[0_0_15px_rgba(215,255,63,0.15)] flex items-center justify-center gap-1.5 focus:outline-none"
+                              >
+                                <span>📱</span> Share via WhatsApp
+                              </button>
+                              <button
+                                onClick={() => {
+                                  const text = getInvitationText(m);
+                                  navigator.clipboard.writeText(text);
+                                  setToast({ msg: "Invitation text copied successfully", type: "success" });
+                                }}
+                                className="w-full sm:w-auto h-11 px-4 bg-white/5 hover:bg-white/10 border border-white/5 text-[9px] font-black text-white/60 uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-1.5 focus:outline-none"
+                              >
+                                Copy Invitation
+                              </button>
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard.writeText(`${window.location.origin}/open-match/${m.id}`);
+                                  setToast({ msg: "Link copied successfully", type: "success" });
+                                }}
+                                className="w-full sm:w-auto h-11 px-4 bg-white/5 hover:bg-white/10 border border-white/5 text-[9px] font-black text-white/60 uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-1.5 focus:outline-none"
+                              >
+                                Copy Link
+                              </button>
+                            </div>
                           </div>
-                        </div>
+                        )}
 
                         {/* Players Joined: View Players trigger */}
                         <div className="flex items-center justify-between pt-4 border-t border-white/5">
@@ -1064,6 +1162,18 @@ _Play Smarter. Book Faster._`;
                             View Players →
                           </button>
                         </div>
+
+                        {/* Completed Message Banner */}
+                        {isCompleted && (
+                          <div className="bg-white/[0.02] border border-white/5 p-4 rounded-2xl text-center space-y-1">
+                            <p className="text-xs font-black text-white/80 uppercase tracking-wider">
+                              Match Finished
+                            </p>
+                            <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest leading-relaxed">
+                              This match has ended.<br />Thank you for playing with PADELGO.
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </Card>
                   );
